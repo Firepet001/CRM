@@ -1,0 +1,33 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Temporales
+*.tmp
+*.bak
+.cache/
+
+# Backups locales (no subir copias de seguridad de la BD)
+backups/
+*.dump
+*.bak.sql
+
+# Variables de entorno secretas (por si en el futuro las añades)
+.env
+.env.local
+.env.*.local
+
+# Carpeta de extracción del CRM original (no es parte del proyecto)
+pedra_extracted/
+pedra_original.html
