@@ -540,8 +540,19 @@ td.strong{color:var(--text)}
     <div class="modal-body">
       <form id="newExpenseForm">
         <div class="field">
+          <label>Asociar a</label>
+          <div class="tabs" id="expenseTargetTabs" style="margin-bottom:0">
+            <button type="button" class="active" data-target="project">Proyecto</button>
+            <button type="button" data-target="property">Terreno</button>
+          </div>
+        </div>
+        <div class="field" id="expenseProjectField">
           <label>Proyecto</label>
-          <select name="project_id" required></select>
+          <select name="project_id"></select>
+        </div>
+        <div class="field" id="expensePropertyField" style="display:none">
+          <label>Terreno</label>
+          <select name="property_id"></select>
         </div>
         <div class="field-row">
           <div class="field">
@@ -818,6 +829,7 @@ const state = {
   expenses: [],
   selectedClient: null,
   selectedProject: null,
+  selectedProperty: null,
   routeFrom: 'dashboard',
   filters: { query: '', status: 'all', sort: { key: 'last_activity', dir: 'desc' } },
   expenseFilters: { category: 'all', status: 'all', project: 'all' }
@@ -972,6 +984,15 @@ function projectSpent(projectId){
 function projectSpentByStatus(projectId, status){
   return state.expenses.filter(e => e.project_id === projectId && e.status === status)
                        .reduce((s,e)=>s + Number(e.amount_usd||0), 0);
+}
+// Total de gastos administrativos en un terreno
+function propertySpent(propertyId){
+  return state.expenses.filter(e => e.property_id === propertyId)
+                       .reduce((s,e)=>s + Number(e.amount_usd||0), 0);
+}
+// Coste total acumulado de un terreno (precio compra + admin)
+function propertyTotalCost(property){
+  return Number(property?.price_usd||0) + propertySpent(property?.id);
 }
 
 //// ----------------------- ROUTING -----------------------
@@ -1342,7 +1363,7 @@ function viewProperties(){
           <tbody>
             ${state.properties.length===0?`<tr><td colspan="7" style="padding:40px;text-align:center;color:#666">Aún no hay terrenos registrados. <button class="btn ghost" data-action="new-property">Añadir el primero</button></td></tr>`:
             state.properties.map(p => `
-              <tr>
+              <tr data-property-id-row="${p.id}">
                 <td class="mono" data-label="Código">${escapeHtml(p.code||'—')}</td>
                 <td class="strong" data-label="Título">${escapeHtml(p.title)}</td>
                 <td class="dim" data-label="Sector">${escapeHtml(p.sector||'—')}</td>
@@ -1518,6 +1539,98 @@ function viewExpenses(){
     </div>`;
 }
 
+// ===== Property Detail =====
+function viewPropertyDetail(){
+  const t = state.selectedProperty;
+  if (!t){ setRoute('properties'); return ''; }
+  const exps = state.expenses.filter(e => e.property_id === t.id)
+                .sort((x,y) => new Date(y.spent_on) - new Date(x.spent_on));
+  const adminTotal = exps.reduce((s,e)=>s + Number(e.amount_usd||0), 0);
+  const adminPending = exps.filter(e=>e.status==='pendiente').reduce((s,e)=>s + Number(e.amount_usd||0), 0);
+  const total = Number(t.price_usd||0) + adminTotal;
+  const projects = state.projects.filter(p => p.property_id === t.id);
+
+  const statusLabel = ({disponible:'Disponible',en_negociacion:'En negociación',adquirido:'Adquirido',vendido:'Vendido'})[t.status]||t.status;
+  const statusClass = t.status==='adquirido'?'gold':t.status==='en_negociacion'?'warn':t.status==='vendido'?'ok':'';
+
+  return `
+    <div class="page">
+      <button class="detail-back" data-action="back-to-properties">← Terrenos</button>
+
+      <div class="page-header" style="margin-bottom:18px">
+        <div>
+          <div class="page-eyebrow">${escapeHtml(t.code||'')} · <span class="pill ${statusClass}" style="font-size:10px">${statusLabel}</span></div>
+          <h1 class="page-title">${escapeHtml(t.title)}</h1>
+          <div class="page-sub">📍 ${escapeHtml(t.address||'—')}${t.sector?` · ${escapeHtml(t.sector)}`:''}</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn" data-action="new-expense" data-property-id="${t.id}">+ Gasto admin.</button>
+          <button class="btn primary" data-action="edit-property" data-property-id="${t.id}">Editar</button>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        ${kpi('Precio de compra',  fmtMoneyExact(t.price_usd), null, true,  'pago al vendedor', null, true)}
+        ${kpi('Gastos admin.',     fmtMoneyExact(adminTotal),  null, false, fmtMoneyExact(adminPending) + ' pendiente', null)}
+        ${kpi('Coste total',       fmtMoneyExact(total),       null, true,  'precio + gastos administrativos', null, true)}
+        ${kpi('Área',              t.area_m2?(Number(t.area_m2).toLocaleString('es-EC')+' m²'):'—', null, true, t.area_m2 && t.price_usd ? '$' + (Number(t.price_usd)/Number(t.area_m2)).toFixed(0) + '/m²' : '', null)}
+      </div>
+
+      <div class="dash-grid">
+        <!-- Notas + proyectos -->
+        <div class="card detail-info">
+          <dl>
+            <dt>Código</dt>      <dd class="mono">${escapeHtml(t.code||'—')}</dd>
+            <dt>Estado</dt>      <dd><span class="pill ${statusClass}">${statusLabel}</span></dd>
+            <dt>Sector</dt>      <dd>${escapeHtml(t.sector||'—')}</dd>
+            <dt>Dirección</dt>   <dd>${escapeHtml(t.address||'—')}</dd>
+            <dt>Área</dt>        <dd>${t.area_m2?Number(t.area_m2).toLocaleString('es-EC')+' m²':'—'}</dd>
+            <dt>Precio</dt>      <dd class="mono" style="color:var(--gold)">${fmtMoneyExact(t.price_usd)}</dd>
+          </dl>
+
+          ${t.notes?`<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border-soft);font-size:12px;color:var(--text-muted);line-height:1.55">${escapeHtml(t.notes)}</div>`:''}
+
+          <div style="margin-top:18px">
+            <div class="card-title" style="margin-bottom:8px">Proyectos vinculados (${projects.length})</div>
+            ${projects.length===0?`<div style="font-size:12px;color:#666">Ningún proyecto está usando este terreno todavía.</div>`:projects.map(p=>`
+              <div data-project-id-row="${p.id}" style="cursor:pointer;padding:8px 0;border-bottom:1px solid var(--border-soft);font-size:12px;display:flex;justify-content:space-between">
+                <span style="color:var(--text)">${escapeHtml(p.code||'')} · ${escapeHtml(p.title)}</span>
+                <span class="pill ${p.stage==='entrega'?'gold':''}" style="font-size:10px">${stageLabel(p.stage)}</span>
+              </div>`).join('')}
+          </div>
+        </div>
+
+        <!-- Gastos administrativos -->
+        <div class="card flush">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Gastos administrativos del terreno</div>
+              <div class="card-sub">Impuestos, escrituras, vigilancia, mantenimiento, servicios…</div>
+            </div>
+            <button class="btn primary" data-action="new-expense" data-property-id="${t.id}">+ Gasto</button>
+          </div>
+          ${exps.length===0?`<div style="padding:30px;text-align:center;color:#666;font-size:12px">Sin gastos administrativos registrados aún.</div>`:`
+            <table>
+              <thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Proveedor</th><th class="right">Monto</th><th>Estado</th><th></th></tr></thead>
+              <tbody>
+                ${exps.map(e => `
+                  <tr>
+                    <td class="mono muted" data-label="Fecha">${fmtDate(e.spent_on)}</td>
+                    <td class="strong" data-label="Descripción">${escapeHtml(e.description)}</td>
+                    <td data-label="Categoría"><span class="pill" style="font-size:10px">${expCatLabel(e.category)}</span></td>
+                    <td class="dim" data-label="Proveedor">${escapeHtml(e.vendor||'—')}</td>
+                    <td class="strong right mono" data-label="Monto">${fmtMoneyExact(e.amount_usd)}</td>
+                    <td data-label="Estado"><span class="pill ${e.status==='pagado'?'ok':'warn'}" style="font-size:10px">${e.status==='pagado'?'Pagado':'Pendiente'}</span></td>
+                    <td class="last-col">${e.status==='pendiente'?`<button class="btn icon" data-mark-paid="${e.id}" title="Marcar pagado">✓</button>`:''}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          `}
+        </div>
+      </div>
+    </div>`;
+}
+
 // ===== Project Detail =====
 function viewProjectDetail(){
   const p = state.selectedProject;
@@ -1528,7 +1641,14 @@ function viewProjectDetail(){
                 .sort((x,y) => new Date(y.occurred_at) - new Date(x.occurred_at));
   const exps = state.expenses.filter(e => e.project_id === p.id)
                 .sort((x,y) => new Date(y.spent_on) - new Date(x.spent_on));
-  const totalSpent = exps.reduce((s,e)=>s + Number(e.amount_usd||0), 0);
+  const obraSpent = exps.reduce((s,e)=>s + Number(e.amount_usd||0), 0);
+
+  // Si el proyecto es propio y tiene terreno, sumamos su coste al total
+  const includeTerreno = p.kind === 'propio' && terreno;
+  const terrenoPrice = includeTerreno ? Number(terreno.price_usd||0) : 0;
+  const terrenoAdmin = includeTerreno ? propertySpent(terreno.id) : 0;
+  const totalSpent   = obraSpent + terrenoPrice + terrenoAdmin;
+
   const budget = Number(p.budget_usd||0);
   const pct = budget ? Math.round(totalSpent/budget*100) : 0;
   const margin = budget - totalSpent;
@@ -1545,7 +1665,7 @@ function viewProjectDetail(){
           <div class="page-sub">
             ${escapeHtml(p.service||'—')} ·
             ${c ? `<a data-client-id="${c.id}" style="color:var(--gold);cursor:pointer">${escapeHtml(c.name)}</a>` : '<span style="color:var(--text-muted)">Sin cliente</span>'}
-            ${terreno?` · 🏗 ${escapeHtml(terreno.code)} ${escapeHtml(terreno.title)}`:''}
+            ${terreno?` · <a data-property-id-row="${terreno.id}" style="color:var(--gold);cursor:pointer">🏗 ${escapeHtml(terreno.code)} ${escapeHtml(terreno.title)}</a>`:''}
           </div>
         </div>
         <div class="page-actions">
@@ -1572,13 +1692,22 @@ function viewProjectDetail(){
         <div class="card detail-info">
           <dl>
             <dt>Presupuesto</dt><dd class="mono" style="color:var(--gold)">${fmtMoneyExact(p.budget_usd)}</dd>
-            <dt>Gastado</dt>    <dd class="mono">${fmtMoneyExact(totalSpent)} <span style="color:#666;font-size:11px">(${pct}%)</span></dd>
+            <dt>Inversión total</dt><dd class="mono">${fmtMoneyExact(totalSpent)} <span style="color:#666;font-size:11px">(${pct}%)</span></dd>
             <dt>Margen</dt>     <dd class="mono" style="color:${margin>=0?'var(--success)':'var(--danger)'}">${fmtMoneyExact(margin)}</dd>
             <dt>Área</dt>       <dd>${p.area_m2?(Number(p.area_m2).toLocaleString('es-EC')+' m²'):'—'}</dd>
             <dt>Avance</dt>     <dd>${p.progress||0}%</dd>
             <dt>Cierre</dt>     <dd>${fmtDate(p.due_date)}</dd>
             <dt>Días en etapa</dt><dd class="mono">${p.days_in_stage||0}</dd>
           </dl>
+
+          ${includeTerreno?`
+          <div style="margin-top:14px;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px">
+            <div style="font-size:11px;color:#A1A1A1;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">Desglose de inversión</div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span style="color:var(--text-muted)">Precio del terreno</span><span class="mono">${fmtMoneyExact(terrenoPrice)}</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span style="color:var(--text-muted)">Gastos admin. terreno</span><span class="mono">${fmtMoneyExact(terrenoAdmin)}</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span style="color:var(--text-muted)">Gastos de obra</span><span class="mono">${fmtMoneyExact(obraSpent)}</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0 0;border-top:1px solid var(--border-soft);margin-top:6px"><strong style="color:var(--text)">Total</strong><strong class="mono" style="color:var(--gold)">${fmtMoneyExact(totalSpent)}</strong></div>
+          </div>`:''}
 
           ${budget?`
           <div style="margin-top:14px">
@@ -1764,6 +1893,7 @@ function render(){
     case 'expenses':   html = viewExpenses();   break;
     case 'detail':     html = viewDetail();     break;
     case 'project':    html = viewProjectDetail(); break;
+    case 'property':   html = viewPropertyDetail(); break;
     default:           html = viewDashboard();
   }
   root.innerHTML = html;
@@ -1910,26 +2040,52 @@ function openModal(prefill = {}){
 function closeModal(){ $('#modal').classList.remove('open'); $('#newProjectForm').reset(); }
 
 function openExpenseModal(prefill = {}){
-  const sel = $('#newExpenseForm select[name="project_id"]');
-  sel.innerHTML = state.projects.map(p =>
+  const projSel = $('#newExpenseForm select[name="project_id"]');
+  const propSel = $('#newExpenseForm select[name="property_id"]');
+  projSel.innerHTML = state.projects.map(p =>
     `<option value="${p.id}" ${prefill.project_id===p.id?'selected':''}>${escapeHtml(p.code||'')} · ${escapeHtml(p.title)}</option>`
   ).join('');
+  propSel.innerHTML = state.properties.map(p =>
+    `<option value="${p.id}" ${prefill.property_id===p.id?'selected':''}>${escapeHtml(p.code||'')} · ${escapeHtml(p.title)}</option>`
+  ).join('');
+
+  // Selección de target (proyecto vs terreno)
+  const target = prefill.property_id ? 'property' : 'project';
+  setExpenseTarget(target);
+
+  // configurar tabs
+  $$('#expenseTargetTabs button').forEach(b => {
+    b.onclick = () => setExpenseTarget(b.dataset.target);
+  });
+
   // fecha por defecto = hoy
   const today = new Date().toISOString().slice(0,10);
   $('#newExpenseForm input[name="spent_on"]').value = today;
   $('#modalExpense').classList.add('open');
+}
+function setExpenseTarget(target){
+  $$('#expenseTargetTabs button').forEach(b =>
+    b.classList.toggle('active', b.dataset.target === target));
+  $('#expenseProjectField').style.display  = target === 'project'  ? '' : 'none';
+  $('#expensePropertyField').style.display = target === 'property' ? '' : 'none';
+  // limpia el otro selector para que no llegue al insert
+  if (target === 'project')  $('#newExpenseForm select[name="property_id"]').value = '';
+  if (target === 'property') $('#newExpenseForm select[name="project_id"]').value  = '';
 }
 function closeExpenseModal(){ $('#modalExpense').classList.remove('open'); $('#newExpenseForm').reset(); }
 
 async function saveExpense(){
   const f = $('#newExpenseForm');
   const data = Object.fromEntries(new FormData(f));
-  if (!data.project_id) { toast('Falta el proyecto', true); return; }
+  if (!data.project_id && !data.property_id) { toast('Asocia el gasto a un proyecto o terreno', true); return; }
   if (!data.description) { toast('Falta la descripción', true); return; }
   if (!data.amount_usd || Number(data.amount_usd) <= 0) { toast('Monto inválido', true); return; }
   data.amount_usd = Number(data.amount_usd);
   if (!data.status) data.status = 'pendiente';
   if (data.status === 'pagado' && !data.paid_on) data.paid_on = data.spent_on;
+  // limpia los vacíos para no mandar strings al UUID
+  if (!data.project_id)  delete data.project_id;
+  if (!data.property_id) delete data.property_id;
 
   if (DEMO_MODE){
     const row = { id: 'demo-exp-' + Date.now(), created_at: new Date().toISOString(), ...data };
@@ -2236,6 +2392,13 @@ function openProject(id){
   state.routeFrom = state.route;
   setRoute('project');
 }
+function openPropertyDetail(id){
+  const t = state.properties.find(x => x.id === id);
+  if (!t) return;
+  state.selectedProperty = t;
+  state.routeFrom = state.route;
+  setRoute('property');
+}
 
 //// ----------------------- INIT --------------------------
 document.addEventListener('click', e => {
@@ -2281,12 +2444,19 @@ document.addEventListener('click', e => {
     if (act === 'save-property') saveProperty();
     if (act === 'back') setRoute(state.routeFrom || 'clients');
     if (act === 'back-to-from') setRoute(state.routeFrom || 'pipeline');
+    if (act === 'back-to-properties') setRoute('properties');
     if (act === 'reload') reloadAll();
   }
   // click en una fila con data-project-id abre el detalle del proyecto
   const projRow = e.target.closest('[data-project-id-row]');
   if (projRow && !a){
     openProject(projRow.dataset.projectIdRow);
+    return;
+  }
+  // click en una fila con data-property-id-row abre el detalle del terreno
+  const propRow = e.target.closest('[data-property-id-row]');
+  if (propRow && !a){
+    openPropertyDetail(propRow.dataset.propertyIdRow);
     return;
   }
   const r = e.target.closest('[data-route]');
