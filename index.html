@@ -591,6 +591,68 @@ td.strong{color:var(--text)}
   </div>
 </div>
 
+<!-- Modal Nuevo / Editar Terreno -->
+<div class="modal-backdrop" id="modalProperty">
+  <div class="modal" role="dialog" aria-labelledby="modalPropertyTitle">
+    <div class="modal-head">
+      <h3 id="modalPropertyTitle">Nuevo terreno</h3>
+      <button class="btn icon" data-action="close-property" aria-label="Cerrar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 6l12 12M6 18L18 6"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="newPropertyForm">
+        <input type="hidden" name="id" />
+        <div class="field-row">
+          <div class="field">
+            <label>Código</label>
+            <input name="code" placeholder="T-005 (auto si lo dejas vacío)" />
+          </div>
+          <div class="field">
+            <label>Estado</label>
+            <select name="status" required>
+              <option value="disponible">Disponible</option>
+              <option value="en_negociacion">En negociación</option>
+              <option value="adquirido">Adquirido</option>
+              <option value="vendido">Vendido</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Título</label>
+          <input name="title" required placeholder="Ej. Terreno Av. Pío Jaramillo" />
+        </div>
+        <div class="field">
+          <label>Dirección</label>
+          <input name="address" placeholder="Calle, número, referencia" />
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Sector / Barrio</label>
+            <input name="sector" placeholder="San Cayetano, La Tebaida..." />
+          </div>
+          <div class="field">
+            <label>Área (m²)</label>
+            <input name="area_m2" type="number" min="0" step="1" placeholder="320" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Precio (USD)</label>
+          <input name="price_usd" type="number" min="0" step="100" placeholder="78000" />
+        </div>
+        <div class="field">
+          <label>Notas</label>
+          <textarea name="notes" placeholder="Observaciones, restricciones, vecinos, servicios..."></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-action="close-property">Cancelar</button>
+      <button class="btn primary" data-action="save-property" id="savePropertyBtn">Crear terreno</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Nuevo / Editar Cliente -->
 <div class="modal-backdrop" id="modalClient">
   <div class="modal" role="dialog" aria-labelledby="modalClientTitle">
@@ -1268,14 +1330,17 @@ function viewProperties(){
           <h1 class="page-title">Terrenos <span class="count">${state.properties.length}</span></h1>
           <div class="page-sub">Lotes para proyectos propios — compra, dev y venta</div>
         </div>
+        <div class="page-actions">
+          <button class="btn primary" data-action="new-property">+ Nuevo terreno</button>
+        </div>
       </div>
       <div class="card flush">
         <table>
           <thead><tr>
-            <th>Código</th><th>Título</th><th>Sector</th><th class="right">m²</th><th class="right">Precio</th><th>Estado</th>
+            <th>Código</th><th>Título</th><th>Sector</th><th class="right">m²</th><th class="right">Precio</th><th>Estado</th><th></th>
           </tr></thead>
           <tbody>
-            ${state.properties.length===0?`<tr><td colspan="6" style="padding:40px;text-align:center;color:#666">Aún no hay terrenos registrados.</td></tr>`:
+            ${state.properties.length===0?`<tr><td colspan="7" style="padding:40px;text-align:center;color:#666">Aún no hay terrenos registrados. <button class="btn ghost" data-action="new-property">Añadir el primero</button></td></tr>`:
             state.properties.map(p => `
               <tr>
                 <td class="mono" data-label="Código">${escapeHtml(p.code||'—')}</td>
@@ -1284,6 +1349,7 @@ function viewProperties(){
                 <td class="dim right mono" data-label="m²">${p.area_m2?Number(p.area_m2).toLocaleString('es-EC'):'—'}</td>
                 <td class="strong right mono" data-label="Precio">${fmtMoney(p.price_usd)}</td>
                 <td data-label="Estado"><span class="pill ${p.status==='adquirido'?'gold':p.status==='en_negociacion'?'warn':p.status==='vendido'?'ok':''}">${({disponible:'Disponible',en_negociacion:'En negociación',adquirido:'Adquirido',vendido:'Vendido'})[p.status]||p.status}</span></td>
+                <td class="right last-col"><button class="btn icon" data-action="edit-property" data-property-id="${p.id}" title="Editar">✎</button></td>
               </tr>`).join('')}
           </tbody>
         </table>
@@ -1889,6 +1955,77 @@ async function saveExpense(){
   render();
 }
 
+function openPropertyModal(prefill = {}){
+  const f = $('#newPropertyForm');
+  f.reset();
+  const isEdit = !!prefill.id;
+  $('#modalPropertyTitle').textContent = isEdit ? 'Editar terreno' : 'Nuevo terreno';
+  $('#savePropertyBtn').textContent    = isEdit ? 'Guardar cambios' : 'Crear terreno';
+  if (isEdit){
+    f.querySelector('input[name="id"]').value       = prefill.id;
+    f.querySelector('input[name="code"]').value     = prefill.code || '';
+    f.querySelector('select[name="status"]').value  = prefill.status || 'disponible';
+    f.querySelector('input[name="title"]').value    = prefill.title || '';
+    f.querySelector('input[name="address"]').value  = prefill.address || '';
+    f.querySelector('input[name="sector"]').value   = prefill.sector || '';
+    if (prefill.area_m2)   f.querySelector('input[name="area_m2"]').value   = prefill.area_m2;
+    if (prefill.price_usd) f.querySelector('input[name="price_usd"]').value = prefill.price_usd;
+    f.querySelector('textarea[name="notes"]').value = prefill.notes || '';
+  } else {
+    f.querySelector('input[name="id"]').value = '';
+  }
+  $('#modalProperty').classList.add('open');
+}
+function closePropertyModal(){ $('#modalProperty').classList.remove('open'); $('#newPropertyForm').reset(); }
+
+async function saveProperty(){
+  const f = $('#newPropertyForm');
+  const data = Object.fromEntries(new FormData(f));
+  const isEdit = !!data.id;
+  const editId = data.id;
+  delete data.id;
+  if (!data.title) { toast('Falta el título', true); return; }
+  if (!data.status) data.status = 'disponible';
+  if (data.area_m2 === '')   delete data.area_m2;   else data.area_m2   = Number(data.area_m2);
+  if (data.price_usd === '') delete data.price_usd; else data.price_usd = Number(data.price_usd);
+  ['code','address','sector','notes'].forEach(k => { if (data[k] === '') delete data[k]; });
+
+  // autogenerar código si no se especifica (solo en alta)
+  if (!isEdit && !data.code){
+    const next = state.properties.length + 1;
+    data.code = 'T-' + String(next).padStart(3,'0');
+  }
+
+  if (isEdit){
+    if (DEMO_MODE){
+      const idx = state.properties.findIndex(x => x.id === editId);
+      if (idx >= 0) state.properties[idx] = { ...state.properties[idx], ...data };
+      closePropertyModal(); toast('Terreno actualizado (demo)'); render(); return;
+    }
+    const { data:row, error } = await sb.from('properties').update(data).eq('id', editId).select('*').single();
+    if (error){ toast('Error: '+error.message, true); return; }
+    const idx = state.properties.findIndex(x => x.id === editId);
+    if (idx >= 0) state.properties[idx] = row;
+    closePropertyModal(); toast('Terreno actualizado'); render(); return;
+  }
+
+  if (DEMO_MODE){
+    const row = { id: 'demo-t-' + Date.now(), created_at: new Date().toISOString(), ...data };
+    state.properties.push(row);
+    closePropertyModal(); toast('Terreno creado (demo) · ' + row.code); render(); return;
+  }
+  const { data:row, error } = await sb.from('properties').insert(data).select('*').single();
+  if (error){
+    if (/duplicate.*code/i.test(error.message))
+      toast('El código ' + data.code + ' ya existe', true);
+    else
+      toast('Error: '+error.message, true);
+    return;
+  }
+  state.properties.push(row);
+  closePropertyModal(); toast('Terreno creado · ' + row.code); render();
+}
+
 function openClientModal(prefill = {}){
   const f = $('#newClientForm');
   f.reset();
@@ -2134,6 +2271,14 @@ document.addEventListener('click', e => {
     }
     if (act === 'close-client') closeClientModal();
     if (act === 'save-client') saveClient();
+    if (act === 'new-property'){ openPropertyModal(); }
+    if (act === 'edit-property'){
+      const pid = a.dataset.propertyId;
+      const p = state.properties.find(x => x.id === pid);
+      if (p) openPropertyModal(p);
+    }
+    if (act === 'close-property') closePropertyModal();
+    if (act === 'save-property') saveProperty();
     if (act === 'back') setRoute(state.routeFrom || 'clients');
     if (act === 'back-to-from') setRoute(state.routeFrom || 'pipeline');
     if (act === 'reload') reloadAll();
@@ -2154,6 +2299,7 @@ $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeM
 $('#modalExpense').addEventListener('click', e => { if (e.target.id === 'modalExpense') closeExpenseModal(); });
 $('#modalActivity').addEventListener('click', e => { if (e.target.id === 'modalActivity') closeActivityModal(); });
 $('#modalClient').addEventListener('click', e => { if (e.target.id === 'modalClient') closeClientModal(); });
+$('#modalProperty').addEventListener('click', e => { if (e.target.id === 'modalProperty') closePropertyModal(); });
 
 // Filtros de gastos (delegación: se atan en attachRouteHandlers cada render)
 
