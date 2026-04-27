@@ -590,6 +590,65 @@ td.strong{color:var(--text)}
   </div>
 </div>
 
+<!-- Modal Nueva Actividad -->
+<div class="modal-backdrop" id="modalActivity">
+  <div class="modal" role="dialog" aria-labelledby="modalActivityTitle">
+    <div class="modal-head">
+      <h3 id="modalActivityTitle">Nueva actividad</h3>
+      <button class="btn icon" data-action="close-activity" aria-label="Cerrar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 6l12 12M6 18L18 6"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="newActivityForm">
+        <input type="hidden" name="client_id" />
+        <div class="field-row">
+          <div class="field">
+            <label>Tipo</label>
+            <select name="type" required>
+              <option value="reunion">Reunión</option>
+              <option value="llamada">Llamada</option>
+              <option value="email">Email</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="visita_obra">Visita de obra</option>
+              <option value="nota">Nota</option>
+              <option value="tarea">Tarea</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Autor</label>
+            <select name="author">
+              <option value="pedro">Pedro (gerente)</option>
+              <option value="residente">Residente de obra</option>
+              <option value="estudiante">Estudiante</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Título</label>
+          <input name="title" required placeholder="Ej. Revisión de avance de obra" />
+        </div>
+        <div class="field">
+          <label>Proyecto (opcional)</label>
+          <select name="project_id"><option value="">— Sin proyecto asociado —</option></select>
+        </div>
+        <div class="field">
+          <label>Detalle</label>
+          <textarea name="body" placeholder="Notas, acuerdos, próximos pasos..."></textarea>
+        </div>
+        <div class="field">
+          <label>Fecha y hora</label>
+          <input name="occurred_at" type="datetime-local" required />
+        </div>
+      </form>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-action="close-activity">Cancelar</button>
+      <button class="btn primary" data-action="save-activity">Registrar actividad</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast"></div>
 
 <!-- ========================== JS ========================== -->
@@ -1579,6 +1638,56 @@ async function saveExpense(){
   render();
 }
 
+function openActivityModal(prefill = {}){
+  const f = $('#newActivityForm');
+  // proyecto: solo proyectos del cliente, si hay
+  const projSel = f.querySelector('select[name="project_id"]');
+  const clientId = prefill.client_id;
+  const projects = clientId
+    ? state.projects.filter(p => p.client_id === clientId)
+    : state.projects;
+  projSel.innerHTML = '<option value="">— Sin proyecto asociado —</option>' +
+    projects.map(p => `<option value="${p.id}">${escapeHtml(p.code||'')} · ${escapeHtml(p.title)}</option>`).join('');
+  f.querySelector('input[name="client_id"]').value = clientId || '';
+  // hora actual
+  const now = new Date(Date.now() - new Date().getTimezoneOffset()*60000)
+                .toISOString().slice(0,16);
+  f.querySelector('input[name="occurred_at"]').value = now;
+  $('#modalActivity').classList.add('open');
+}
+function closeActivityModal(){ $('#modalActivity').classList.remove('open'); $('#newActivityForm').reset(); }
+
+async function saveActivity(){
+  const f = $('#newActivityForm');
+  const data = Object.fromEntries(new FormData(f));
+  if (!data.client_id)  { toast('Falta el cliente', true); return; }
+  if (!data.title)      { toast('Falta el título', true); return; }
+  if (!data.occurred_at){ toast('Falta la fecha', true); return; }
+  if (!data.project_id) data.project_id = null;
+  // datetime-local devuelve "YYYY-MM-DDTHH:mm" (sin timezone) — lo convertimos a ISO
+  data.occurred_at = new Date(data.occurred_at).toISOString();
+
+  if (DEMO_MODE){
+    const row = { id: 'demo-act-' + Date.now(), created_at: new Date().toISOString(), ...data };
+    state.activities.unshift(row);
+    closeActivityModal();
+    toast('Actividad registrada (demo)');
+    render();
+    return;
+  }
+
+  const { data:row, error } = await sb.from('activities').insert(data).select('*').single();
+  if (error) { toast('Error guardando: ' + error.message, true); return; }
+  state.activities.unshift(row);
+  // refresca last_activity del cliente
+  await sb.from('clients').update({ last_activity: row.occurred_at }).eq('id', row.client_id);
+  const c = state.clients.find(x => x.id === row.client_id);
+  if (c) c.last_activity = row.occurred_at;
+  closeActivityModal();
+  toast('Actividad registrada');
+  render();
+}
+
 async function markExpensePaid(id){
   const e = state.expenses.find(x => x.id === id);
   if (!e) return;
@@ -1637,6 +1746,9 @@ document.addEventListener('click', e => {
     if (act === 'new-expense'){ openExpenseModal({ project_id: a.dataset.projectId }); }
     if (act === 'close-expense') closeExpenseModal();
     if (act === 'save-expense') saveExpense();
+    if (act === 'new-activity'){ openActivityModal({ client_id: a.dataset.clientId }); }
+    if (act === 'close-activity') closeActivityModal();
+    if (act === 'save-activity') saveActivity();
     if (act === 'back') setRoute('clients');
     if (act === 'reload') reloadAll();
   }
@@ -1648,6 +1760,7 @@ document.addEventListener('click', e => {
 });
 $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
 $('#modalExpense').addEventListener('click', e => { if (e.target.id === 'modalExpense') closeExpenseModal(); });
+$('#modalActivity').addEventListener('click', e => { if (e.target.id === 'modalActivity') closeActivityModal(); });
 
 // Filtros de gastos (delegación: se atan en attachRouteHandlers cada render)
 
