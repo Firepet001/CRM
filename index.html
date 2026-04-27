@@ -490,13 +490,17 @@ td.strong{color:var(--text)}
         </div>
         <div class="field-row">
           <div class="field">
-            <label>Presupuesto (USD)</label>
+            <label>Presupuesto / coste obra (USD)</label>
             <input name="budget_usd" type="number" min="0" step="100" placeholder="120000" />
           </div>
           <div class="field">
             <label>Área (m²)</label>
             <input name="area_m2" type="number" min="0" step="1" placeholder="180" />
           </div>
+        </div>
+        <div class="field" id="salePriceField" style="display:none">
+          <label>Precio de venta esperado (USD) <span style="color:#666;font-weight:400">— solo proyectos propios</span></label>
+          <input name="sale_price_usd" type="number" min="0" step="100" placeholder="250000" />
         </div>
         <div class="field-row">
           <div class="field">
@@ -1047,8 +1051,12 @@ function pseudoSeries(seed, n=12){
 
 // ===== Dashboard =====
 function viewDashboard(){
+  // Revenue contratado:
+  //   - propios: precio de venta esperado (sale_price_usd)
+  //   - cliente: presupuesto (lo que paga el cliente)
+  // Solo proyectos en contrato o entregados.
   const total = state.projects.filter(p => ['contrato','entrega'].includes(p.stage))
-                .reduce((s,p)=>s + Number(p.budget_usd||0), 0);
+                .reduce((s,p)=> s + Number((p.kind==='propio' ? p.sale_price_usd : p.budget_usd) || 0), 0);
   const active = state.projects.filter(p => p.stage !== 'entrega').length;
   const closed = state.projects.filter(p => p.stage === 'entrega').length;
   const totalP = state.projects.length || 1;
@@ -1129,19 +1137,20 @@ function viewDashboard(){
           </div>
           <table>
             <thead><tr>
-              <th>Proyecto</th><th>Cliente</th><th>Tipo</th><th>Etapa</th><th class="right">Presupuesto</th><th class="right">m²</th><th class="right">Cierre</th>
+              <th>Proyecto</th><th>Cliente</th><th>Tipo</th><th>Etapa</th><th class="right">Revenue</th><th class="right">m²</th><th class="right">Cierre</th>
             </tr></thead>
             <tbody>
               ${recent.length===0 ? `<tr><td colspan="7" style="padding:40px;text-align:center;color:#666">Aún no hay proyectos. <button class="btn ghost" data-action="new-project">Crear el primero</button></td></tr>` :
               recent.map(p => {
                 const c = state.clients.find(x => x.id === p.client_id);
+                const revenue = p.kind === 'propio' ? Number(p.sale_price_usd||0) : Number(p.budget_usd||0);
                 return `
                   <tr data-project-id-row="${p.id}">
                     <td class="strong" data-label="Proyecto">${escapeHtml(p.title)}</td>
                     <td class="dim" data-label="Cliente">${c ? `<div style="display:flex;align-items:center;gap:8px">${avatar(c.name,22)}${escapeHtml(c.name)}</div>` : '—'}</td>
                     <td data-label="Tipo"><span class="pill kind-${p.kind}">${p.kind === 'propio' ? 'Propio' : 'Cliente'}</span></td>
                     <td data-label="Etapa"><span class="pill ${p.stage==='entrega'?'gold':''}">${stageLabel(p.stage)}</span></td>
-                    <td class="strong right mono" data-label="Presupuesto">${fmtMoney(p.budget_usd)}</td>
+                    <td class="strong right mono" data-label="Revenue">${fmtMoney(revenue)}</td>
                     <td class="dim right mono" data-label="m²">${p.area_m2 ? Number(p.area_m2).toLocaleString('es-EC') : '—'}</td>
                     <td class="muted right mono" data-label="Cierre">${fmtDate(p.due_date)}</td>
                   </tr>`;
@@ -1279,7 +1288,8 @@ function viewClients(){
 
 // ===== Pipeline =====
 function viewPipeline(){
-  const totalValue = state.projects.filter(p=>p.stage!=='entrega').reduce((s,p)=>s+Number(p.budget_usd||0),0);
+  const totalValue = state.projects.filter(p=>p.stage!=='entrega')
+    .reduce((s,p)=> s + Number((p.kind==='propio' ? p.sale_price_usd : p.budget_usd) || 0), 0);
   return `
     <div class="page" style="display:flex;flex-direction:column;height:100%;overflow:hidden;padding-bottom:0">
       <div class="page-header">
@@ -1311,6 +1321,7 @@ function viewPipeline(){
                   items.map(p => {
                     const c = state.clients.find(x => x.id === p.client_id);
                     const late = (p.days_in_stage||0) > 10 && p.stage !== 'entrega';
+                    const revenue = p.kind === 'propio' ? Number(p.sale_price_usd||0) : Number(p.budget_usd||0);
                     return `
                       <div class="kard" draggable="true" data-id="${p.id}" data-client-id="${c?.id||''}">
                         <div class="kard-title">
@@ -1319,7 +1330,7 @@ function viewPipeline(){
                         </div>
                         <div class="kard-svc">${escapeHtml(p.service||'—')} · <span class="pill kind-${p.kind}" style="font-size:10px;padding:0 6px">${p.kind}</span></div>
                         <div class="kard-row">
-                          <span class="value">${fmtMoney(p.budget_usd)}</span>
+                          <span class="value">${fmtMoney(revenue)}</span>
                           ${p.area_m2?`<span class="m2">${Number(p.area_m2).toLocaleString('es-EC')} m²</span>`:''}
                         </div>
                         <div class="kard-foot">
@@ -1650,8 +1661,15 @@ function viewProjectDetail(){
   const totalSpent   = obraSpent + terrenoPrice + terrenoAdmin;
 
   const budget = Number(p.budget_usd||0);
-  const pct = budget ? Math.round(totalSpent/budget*100) : 0;
-  const margin = budget - totalSpent;
+  const salePrice = Number(p.sale_price_usd||0);
+
+  // Para PROPIO: comparamos vs el precio de venta esperado (revenue real del negocio)
+  // Para CLIENTE: comparamos vs el presupuesto (lo que cobramos al cliente)
+  const isOwn = p.kind === 'propio';
+  const revenueRef = isOwn ? salePrice : budget;
+  const margin = revenueRef - totalSpent;
+  const marginPct = revenueRef ? Math.round(margin / revenueRef * 100) : 0;
+  const pct = revenueRef ? Math.round(totalSpent/revenueRef*100) : 0;
   const barColor = pct>90?'var(--danger)':pct>70?'var(--warn)':'var(--gold)';
 
   return `
@@ -1691,9 +1709,14 @@ function viewProjectDetail(){
         <!-- Info + presupuesto -->
         <div class="card detail-info">
           <dl>
-            <dt>Presupuesto</dt><dd class="mono" style="color:var(--gold)">${fmtMoneyExact(p.budget_usd)}</dd>
-            <dt>Inversión total</dt><dd class="mono">${fmtMoneyExact(totalSpent)} <span style="color:#666;font-size:11px">(${pct}%)</span></dd>
-            <dt>Margen</dt>     <dd class="mono" style="color:${margin>=0?'var(--success)':'var(--danger)'}">${fmtMoneyExact(margin)}</dd>
+            ${isOwn?`
+              <dt>Revenue (venta)</dt><dd class="mono" style="color:var(--gold)">${fmtMoneyExact(salePrice)}</dd>
+              <dt>Coste obra</dt>    <dd class="mono">${fmtMoneyExact(p.budget_usd)}</dd>
+            `:`
+              <dt>Presupuesto</dt><dd class="mono" style="color:var(--gold)">${fmtMoneyExact(p.budget_usd)}</dd>
+            `}
+            <dt>Inversión total</dt><dd class="mono">${fmtMoneyExact(totalSpent)} ${revenueRef?`<span style="color:#666;font-size:11px">(${pct}%)</span>`:''}</dd>
+            <dt>Margen</dt>     <dd class="mono" style="color:${margin>=0?'var(--success)':'var(--danger)'}">${fmtMoneyExact(margin)} ${revenueRef?`<span style="color:#666;font-size:11px">(${marginPct}%)</span>`:''}</dd>
             <dt>Área</dt>       <dd>${p.area_m2?(Number(p.area_m2).toLocaleString('es-EC')+' m²'):'—'}</dd>
             <dt>Avance</dt>     <dd>${p.progress||0}%</dd>
             <dt>Cierre</dt>     <dd>${fmtDate(p.due_date)}</dd>
@@ -2027,14 +2050,22 @@ function openModal(prefill = {}){
     f.querySelector('input[name="title"]').value      = prefill.title || '';
     f.querySelector('select[name="kind"]').value      = prefill.kind || 'cliente';
     f.querySelector('select[name="service"]').value   = prefill.service || 'Vivienda';
-    if (prefill.budget_usd) f.querySelector('input[name="budget_usd"]').value = prefill.budget_usd;
-    if (prefill.area_m2)    f.querySelector('input[name="area_m2"]').value    = prefill.area_m2;
+    if (prefill.budget_usd)     f.querySelector('input[name="budget_usd"]').value     = prefill.budget_usd;
+    if (prefill.sale_price_usd) f.querySelector('input[name="sale_price_usd"]').value = prefill.sale_price_usd;
+    if (prefill.area_m2)        f.querySelector('input[name="area_m2"]').value        = prefill.area_m2;
     f.querySelector('select[name="stage"]').value     = prefill.stage || 'prospeccion';
     if (prefill.due_date)   f.querySelector('input[name="due_date"]').value   = prefill.due_date;
     if (prefill.notes)      f.querySelector('textarea[name="notes"]').value   = prefill.notes;
   } else {
     f.querySelector('input[name="id"]').value = '';
   }
+  // mostrar / ocultar precio de venta segun tipo
+  const kindSel = f.querySelector('select[name="kind"]');
+  const toggleSalePrice = () => {
+    $('#salePriceField').style.display = kindSel.value === 'propio' ? '' : 'none';
+  };
+  toggleSalePrice();
+  kindSel.onchange = toggleSalePrice;
   $('#modal').classList.add('open');
 }
 function closeModal(){ $('#modal').classList.remove('open'); $('#newProjectForm').reset(); }
@@ -2330,10 +2361,13 @@ async function saveProject(){
   if (!data.title) { toast('Falta el título', true); return; }
   if (!data.client_id) data.client_id = null;
   if (!data.property_id) data.property_id = null;
-  if (data.budget_usd === '') delete data.budget_usd; else data.budget_usd = Number(data.budget_usd);
-  if (data.area_m2 === '')   delete data.area_m2;   else data.area_m2   = Number(data.area_m2);
-  if (data.due_date === '')  delete data.due_date;
+  if (data.budget_usd === '')     delete data.budget_usd;     else data.budget_usd     = Number(data.budget_usd);
+  if (data.sale_price_usd === '') delete data.sale_price_usd; else data.sale_price_usd = Number(data.sale_price_usd);
+  if (data.area_m2 === '')        delete data.area_m2;        else data.area_m2        = Number(data.area_m2);
+  if (data.due_date === '')       delete data.due_date;
   if (!data.stage) data.stage = 'prospeccion';
+  // Si es proyecto de cliente, no aplica sale_price → forzamos a null
+  if (data.kind === 'cliente') data.sale_price_usd = null;
 
   if (isEdit){
     if (DEMO_MODE){
