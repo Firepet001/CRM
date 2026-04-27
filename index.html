@@ -591,6 +591,87 @@ td.strong{color:var(--text)}
   </div>
 </div>
 
+<!-- Modal Nuevo / Editar Cliente -->
+<div class="modal-backdrop" id="modalClient">
+  <div class="modal" role="dialog" aria-labelledby="modalClientTitle">
+    <div class="modal-head">
+      <h3 id="modalClientTitle">Nuevo cliente</h3>
+      <button class="btn icon" data-action="close-client" aria-label="Cerrar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 6l12 12M6 18L18 6"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="newClientForm">
+        <input type="hidden" name="id" />
+        <div class="field">
+          <label>Nombre completo</label>
+          <input name="name" required placeholder="Ej. María Jiménez" />
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Empresa (opcional)</label>
+            <input name="company" placeholder="Particular / Andrade & Hijos" />
+          </div>
+          <div class="field">
+            <label>Estado</label>
+            <select name="status" required>
+              <option value="lead">Lead</option>
+              <option value="prospect">Prospect</option>
+              <option value="customer">Customer</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Email</label>
+            <input name="email" type="email" placeholder="cliente@correo.com" />
+          </div>
+          <div class="field">
+            <label>Teléfono</label>
+            <input name="phone" placeholder="+593 99 ..." />
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Ciudad</label>
+            <input name="city" value="Loja" placeholder="Loja" />
+          </div>
+          <div class="field">
+            <label>Origen</label>
+            <select name="source">
+              <option value="">— Sin especificar —</option>
+              <option>Referido</option>
+              <option>Web</option>
+              <option>Instagram</option>
+              <option>Anuncio FB</option>
+              <option>WhatsApp</option>
+              <option>B2B</option>
+              <option>Visita oficina</option>
+              <option>Otro</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Owner (responsable)</label>
+          <select name="owner">
+            <option value="pedro">Pedro (gerente)</option>
+            <option value="residente">Residente</option>
+            <option value="estudiante">Estudiante</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Notas</label>
+          <textarea name="notes" placeholder="Necesidades, observaciones, contexto..."></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-action="close-client">Cancelar</button>
+      <button class="btn primary" data-action="save-client" id="saveClientBtn">Crear cliente</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Nueva Actividad -->
 <div class="modal-backdrop" id="modalActivity">
   <div class="modal" role="dialog" aria-labelledby="modalActivityTitle">
@@ -1058,7 +1139,8 @@ function viewClients(){
           <h1 class="page-title">Clientes <span class="count">${list.length}</span></h1>
         </div>
         <div class="page-actions">
-          <button class="btn primary" data-action="new-project">+ Nuevo proyecto</button>
+          <button class="btn" data-action="new-project">+ Nuevo proyecto</button>
+          <button class="btn primary" data-action="new-client">+ Nuevo cliente</button>
         </div>
       </div>
 
@@ -1519,6 +1601,7 @@ function viewDetail(){
         <div class="page-actions">
           <a class="btn" href="tel:${escapeHtml(c.phone||'')}">📞 Llamar</a>
           <a class="btn" href="mailto:${escapeHtml(c.email||'')}">✉ Email</a>
+          <button class="btn" data-action="edit-client" data-client-id="${c.id}">Editar</button>
           <button class="btn primary" data-action="new-project" data-client-id="${c.id}">+ Proyecto</button>
         </div>
       </div>
@@ -1806,6 +1889,72 @@ async function saveExpense(){
   render();
 }
 
+function openClientModal(prefill = {}){
+  const f = $('#newClientForm');
+  f.reset();
+  const isEdit = !!prefill.id;
+  $('#modalClientTitle').textContent = isEdit ? 'Editar cliente' : 'Nuevo cliente';
+  $('#saveClientBtn').textContent    = isEdit ? 'Guardar cambios' : 'Crear cliente';
+  if (isEdit){
+    f.querySelector('input[name="id"]').value      = prefill.id;
+    f.querySelector('input[name="name"]').value    = prefill.name || '';
+    f.querySelector('input[name="company"]').value = prefill.company || '';
+    f.querySelector('select[name="status"]').value = prefill.status || 'lead';
+    f.querySelector('input[name="email"]').value   = prefill.email || '';
+    f.querySelector('input[name="phone"]').value   = prefill.phone || '';
+    f.querySelector('input[name="city"]').value    = prefill.city || 'Loja';
+    f.querySelector('select[name="source"]').value = prefill.source || '';
+    f.querySelector('select[name="owner"]').value  = prefill.owner || 'pedro';
+    f.querySelector('textarea[name="notes"]').value= prefill.notes || '';
+  } else {
+    f.querySelector('input[name="id"]').value = '';
+    f.querySelector('input[name="city"]').value = 'Loja';
+    f.querySelector('select[name="owner"]').value = 'pedro';
+  }
+  $('#modalClient').classList.add('open');
+}
+function closeClientModal(){ $('#modalClient').classList.remove('open'); $('#newClientForm').reset(); }
+
+async function saveClient(){
+  const f = $('#newClientForm');
+  const data = Object.fromEntries(new FormData(f));
+  const isEdit = !!data.id;
+  const editId = data.id;
+  delete data.id;
+  if (!data.name)   { toast('Falta el nombre', true); return; }
+  if (!data.status) data.status = 'lead';
+  // limpia strings vacíos para que no rompan en email/etc
+  ['email','phone','company','source','notes','city','owner'].forEach(k => {
+    if (data[k] === '') delete data[k];
+  });
+
+  if (isEdit){
+    if (DEMO_MODE){
+      const idx = state.clients.findIndex(x => x.id === editId);
+      if (idx >= 0) state.clients[idx] = { ...state.clients[idx], ...data };
+      state.selectedClient = state.clients[idx];
+      closeClientModal(); toast('Cliente actualizado (demo)'); render(); return;
+    }
+    const { data:row, error } = await sb.from('clients').update(data).eq('id', editId).select('*').single();
+    if (error){ toast('Error: '+error.message, true); return; }
+    const idx = state.clients.findIndex(x => x.id === editId);
+    if (idx >= 0) state.clients[idx] = row;
+    state.selectedClient = row;
+    closeClientModal(); toast('Cliente actualizado'); render(); return;
+  }
+
+  // Crear nuevo
+  if (DEMO_MODE){
+    const row = { id: 'demo-c-' + Date.now(), total_value: 0, last_activity: null, created_at: new Date().toISOString(), ...data };
+    state.clients.unshift(row);
+    closeClientModal(); toast('Cliente creado (demo)'); render(); return;
+  }
+  const { data:row, error } = await sb.from('clients').insert(data).select('*').single();
+  if (error){ toast('Error: '+error.message, true); return; }
+  state.clients.unshift(row);
+  closeClientModal(); toast('Cliente creado · ' + row.name); render();
+}
+
 function openActivityModal(prefill = {}){
   const f = $('#newActivityForm');
   // proyecto: si viene proyecto, deducimos el cliente; si viene cliente, filtramos sus proyectos
@@ -1977,6 +2126,14 @@ document.addEventListener('click', e => {
       const proj = state.projects.find(p => p.id === pid);
       if (proj) openModal(proj);
     }
+    if (act === 'new-client'){ openClientModal(); }
+    if (act === 'edit-client'){
+      const cid = a.dataset.clientId;
+      const c = state.clients.find(x => x.id === cid);
+      if (c) openClientModal(c);
+    }
+    if (act === 'close-client') closeClientModal();
+    if (act === 'save-client') saveClient();
     if (act === 'back') setRoute(state.routeFrom || 'clients');
     if (act === 'back-to-from') setRoute(state.routeFrom || 'pipeline');
     if (act === 'reload') reloadAll();
@@ -1996,6 +2153,7 @@ document.addEventListener('click', e => {
 $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
 $('#modalExpense').addEventListener('click', e => { if (e.target.id === 'modalExpense') closeExpenseModal(); });
 $('#modalActivity').addEventListener('click', e => { if (e.target.id === 'modalActivity') closeActivityModal(); });
+$('#modalClient').addEventListener('click', e => { if (e.target.id === 'modalClient') closeClientModal(); });
 
 // Filtros de gastos (delegación: se atan en attachRouteHandlers cada render)
 
