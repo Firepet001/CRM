@@ -455,6 +455,7 @@ td.strong{color:var(--text)}
     </div>
     <div class="modal-body">
       <form id="newProjectForm">
+        <input type="hidden" name="id" />
         <div class="field">
           <label>Título del proyecto</label>
           <input name="title" required placeholder="Ej. Casa San Cayetano" />
@@ -522,7 +523,7 @@ td.strong{color:var(--text)}
     </div>
     <div class="modal-foot">
       <button class="btn" data-action="close-modal">Cancelar</button>
-      <button class="btn primary" data-action="save-project">Crear proyecto</button>
+      <button class="btn primary" data-action="save-project" id="saveProjectBtn">Crear proyecto</button>
     </div>
   </div>
 </div>
@@ -673,6 +674,8 @@ const state = {
   activities: [],
   expenses: [],
   selectedClient: null,
+  selectedProject: null,
+  routeFrom: 'dashboard',
   filters: { query: '', status: 'all', sort: { key: 'last_activity', dir: 'desc' } },
   expenseFilters: { category: 'all', status: 'all', project: 'all' }
 };
@@ -969,7 +972,7 @@ function viewDashboard(){
               recent.map(p => {
                 const c = state.clients.find(x => x.id === p.client_id);
                 return `
-                  <tr data-client-id="${c?.id||''}">
+                  <tr data-project-id-row="${p.id}">
                     <td class="strong" data-label="Proyecto">${escapeHtml(p.title)}</td>
                     <td class="dim" data-label="Cliente">${c ? `<div style="display:flex;align-items:center;gap:8px">${avatar(c.name,22)}${escapeHtml(c.name)}</div>` : '—'}</td>
                     <td data-label="Tipo"><span class="pill kind-${p.kind}">${p.kind === 'propio' ? 'Propio' : 'Cliente'}</span></td>
@@ -1367,6 +1370,133 @@ function viewExpenses(){
     </div>`;
 }
 
+// ===== Project Detail =====
+function viewProjectDetail(){
+  const p = state.selectedProject;
+  if (!p) { setRoute(state.routeFrom || 'pipeline'); return ''; }
+  const c = state.clients.find(x => x.id === p.client_id);
+  const terreno = state.properties.find(x => x.id === p.property_id);
+  const acts = state.activities.filter(a => a.project_id === p.id)
+                .sort((x,y) => new Date(y.occurred_at) - new Date(x.occurred_at));
+  const exps = state.expenses.filter(e => e.project_id === p.id)
+                .sort((x,y) => new Date(y.spent_on) - new Date(x.spent_on));
+  const totalSpent = exps.reduce((s,e)=>s + Number(e.amount_usd||0), 0);
+  const budget = Number(p.budget_usd||0);
+  const pct = budget ? Math.round(totalSpent/budget*100) : 0;
+  const margin = budget - totalSpent;
+  const barColor = pct>90?'var(--danger)':pct>70?'var(--warn)':'var(--gold)';
+
+  return `
+    <div class="page">
+      <button class="detail-back" data-action="back-to-from">← Volver</button>
+
+      <div class="page-header" style="margin-bottom:18px">
+        <div>
+          <div class="page-eyebrow">${escapeHtml(p.code||'')} · <span class="pill kind-${p.kind}" style="font-size:10px">${p.kind==='propio'?'Propio':'Cliente'}</span></div>
+          <h1 class="page-title">${escapeHtml(p.title)}</h1>
+          <div class="page-sub">
+            ${escapeHtml(p.service||'—')} ·
+            ${c ? `<a data-client-id="${c.id}" style="color:var(--gold);cursor:pointer">${escapeHtml(c.name)}</a>` : '<span style="color:var(--text-muted)">Sin cliente</span>'}
+            ${terreno?` · 🏗 ${escapeHtml(terreno.code)} ${escapeHtml(terreno.title)}`:''}
+          </div>
+        </div>
+        <div class="page-actions">
+          <button class="btn" data-action="new-activity" data-client-id="${c?.id||''}" data-project-id="${p.id}">+ Actividad</button>
+          <button class="btn" data-action="new-expense" data-project-id="${p.id}">+ Gasto</button>
+          <button class="btn primary" data-action="edit-project" data-project-id="${p.id}">Editar</button>
+        </div>
+      </div>
+
+      <!-- Cambio rápido de etapa -->
+      <div class="card" style="margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+          <div style="font-size:11px;color:#666;letter-spacing:.06em;text-transform:uppercase">Etapa actual</div>
+          <div class="tabs" style="flex-wrap:wrap">
+            ${STAGES.map(s => `
+              <button class="${p.stage===s.id?'active':''}" data-stage-set="${s.id}" data-project-id="${p.id}">${s.label}</button>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+
+      <div class="dash-grid">
+        <!-- Info + presupuesto -->
+        <div class="card detail-info">
+          <dl>
+            <dt>Presupuesto</dt><dd class="mono" style="color:var(--gold)">${fmtMoneyExact(p.budget_usd)}</dd>
+            <dt>Gastado</dt>    <dd class="mono">${fmtMoneyExact(totalSpent)} <span style="color:#666;font-size:11px">(${pct}%)</span></dd>
+            <dt>Margen</dt>     <dd class="mono" style="color:${margin>=0?'var(--success)':'var(--danger)'}">${fmtMoneyExact(margin)}</dd>
+            <dt>Área</dt>       <dd>${p.area_m2?(Number(p.area_m2).toLocaleString('es-EC')+' m²'):'—'}</dd>
+            <dt>Avance</dt>     <dd>${p.progress||0}%</dd>
+            <dt>Cierre</dt>     <dd>${fmtDate(p.due_date)}</dd>
+            <dt>Días en etapa</dt><dd class="mono">${p.days_in_stage||0}</dd>
+          </dl>
+
+          ${budget?`
+          <div style="margin-top:14px">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:#666;margin-bottom:4px">
+              <span>Consumo presupuesto</span>
+              <span class="mono" style="color:${barColor}">${pct}%</span>
+            </div>
+            <div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden">
+              <div style="height:100%;background:${barColor};width:${Math.min(100,pct)}%"></div>
+            </div>
+          </div>`:''}
+
+          ${p.notes?`<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border-soft);font-size:12px;color:var(--text-muted);line-height:1.55">${escapeHtml(p.notes)}</div>`:''}
+
+          <!-- Resumen gastos -->
+          <div style="margin-top:18px">
+            <div class="card-title" style="margin-bottom:8px">Gastos (${exps.length})</div>
+            ${exps.length===0?`<div style="font-size:12px;color:#666">Sin gastos registrados aún.</div>`:exps.slice(0,8).map(e=>`
+              <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-soft);font-size:12px;gap:8px">
+                <div style="min-width:0;flex:1">
+                  <div style="color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(e.description)}</div>
+                  <div style="font-size:10px;color:#666">${expCatLabel(e.category)} · ${fmtDate(e.spent_on)}</div>
+                </div>
+                <div style="text-align:right">
+                  <div class="mono" style="color:var(--text)">${fmtMoneyExact(e.amount_usd)}</div>
+                  <span class="pill ${e.status==='pagado'?'ok':'warn'}" style="font-size:9px;padding:0 5px">${e.status==='pagado'?'Pagado':'Pendiente'}</span>
+                </div>
+              </div>`).join('')}
+            ${exps.length>8?`<div style="font-size:11px;color:#666;text-align:center;margin-top:6px">y ${exps.length-8} más...</div>`:''}
+          </div>
+        </div>
+
+        <!-- Timeline actividades -->
+        <div class="card flush">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Actividades del proyecto</div>
+              <div class="card-sub">Reuniones, visitas, decisiones</div>
+            </div>
+            <button class="btn primary" data-action="new-activity" data-client-id="${c?.id||''}" data-project-id="${p.id}">+ Actividad</button>
+          </div>
+          <div style="padding:8px 18px 18px">
+            ${acts.length===0?`<div style="padding:30px;text-align:center;color:#666;font-size:12px">Sin actividades registradas. Pulsa "+ Actividad" para añadir la primera.</div>`:`
+              <div class="timeline">
+                ${acts.map(a => `
+                  <div class="tl-item">
+                    <div class="tl-icon">${activityIcon(a.type)}</div>
+                    <div class="tl-body">
+                      <div class="tl-title">${escapeHtml(a.title)}</div>
+                      <div class="tl-meta">
+                        <span style="text-transform:uppercase;letter-spacing:.06em">${escapeHtml(a.type)}</span>
+                        <span>•</span>
+                        <span>${fmtDateTime(a.occurred_at)}</span>
+                        ${a.author?`<span>•</span><span>${escapeHtml(a.author)}</span>`:''}
+                      </div>
+                      ${a.body?`<div class="tl-text">${escapeHtml(a.body)}</div>`:''}
+                    </div>
+                  </div>`).join('')}
+              </div>
+            `}
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
 // ===== Detail =====
 function viewDetail(){
   const c = state.selectedClient;
@@ -1415,7 +1545,7 @@ function viewDetail(){
               const margin = budget - spent;
               const barColor = pct>90?'var(--danger)':pct>70?'var(--warn)':'var(--gold)';
               return `
-              <div style="padding:10px 0;border-bottom:1px solid var(--border-soft);font-size:12px">
+              <div style="padding:10px 0;border-bottom:1px solid var(--border-soft);font-size:12px;cursor:pointer" data-project-id-row="${p.id}">
                 <div style="display:flex;justify-content:space-between;gap:8px">
                   <span style="color:var(--text)">${escapeHtml(p.title)}</span>
                   <span class="mono" style="color:var(--gold)">${fmtMoney(p.budget_usd)}</span>
@@ -1484,6 +1614,7 @@ function render(){
     case 'properties': html = viewProperties(); break;
     case 'expenses':   html = viewExpenses();   break;
     case 'detail':     html = viewDetail();     break;
+    case 'project':    html = viewProjectDetail(); break;
     default:           html = viewDashboard();
   }
   root.innerHTML = html;
@@ -1493,12 +1624,29 @@ function render(){
 }
 
 function attachRouteHandlers(){
-  // Open client detail from any row
+  // Open client detail from any row con data-client-id (excluye <a> dentro de proyecto)
   $$('tr[data-client-id]').forEach(tr => tr.addEventListener('click', e => {
+    // si el click viene del enlace del cliente dentro de la columna, ya hay handler propio
+    if (e.target.closest('a[data-client-id]')) return;
     const id = tr.dataset.clientId;
     if (!id) return;
     state.selectedClient = state.clients.find(c => c.id === id);
+    state.routeFrom = state.route;
     setRoute('detail');
+  }));
+  // Click en el enlace del cliente dentro del detalle de proyecto
+  $$('a[data-client-id]').forEach(a => a.addEventListener('click', e => {
+    e.preventDefault(); e.stopPropagation();
+    const id = a.dataset.clientId;
+    state.selectedClient = state.clients.find(c => c.id === id);
+    state.routeFrom = state.route;
+    setRoute('detail');
+  }));
+  // Cambio rápido de etapa desde detalle de proyecto
+  $$('[data-stage-set]').forEach(b => b.addEventListener('click', () => {
+    const stageId = b.dataset.stageSet;
+    const projId  = b.dataset.projectId;
+    setProjectStage(projId, stageId);
   }));
   $$('.kard[data-client-id]').forEach(k => k.addEventListener('click', e => {
     if (e.target.closest('[draggable]') && k._wasDrag) { k._wasDrag=false; return; }
@@ -1553,9 +1701,9 @@ function initKanban(){
     });
     card.addEventListener('dragend', () => { card.classList.remove('dragging'); dragId = null; $$('.col', k).forEach(c=>c.classList.remove('over')); });
     card.addEventListener('click', e => {
-      const cid = card.dataset.clientId; if (!cid) return;
-      const c = state.clients.find(x => x.id === cid); if (!c) return;
-      state.selectedClient = c; setRoute('detail');
+      const pid = card.dataset.id; if (!pid) return;
+      // Abre detalle de proyecto (no del cliente) — más útil para gestión
+      openProject(pid);
     });
   });
   $$('.col', k).forEach(col => {
@@ -1581,13 +1729,33 @@ function initKanban(){
 
 //// ----------------------- MODAL ------------------------
 function openModal(prefill = {}){
+  const f = $('#newProjectForm');
+  f.reset();
   // Populate selects
   const clientSel = $('select[name="client_id"]');
   const propSel   = $('select[name="property_id"]');
   clientSel.innerHTML = '<option value="">— Sin cliente asignado —</option>' +
     state.clients.map(c => `<option value="${c.id}" ${prefill.client_id===c.id?'selected':''}>${escapeHtml(c.name)} ${c.company?'· '+escapeHtml(c.company):''}</option>`).join('');
   propSel.innerHTML = '<option value="">— Ninguno —</option>' +
-    state.properties.map(p => `<option value="${p.id}">${escapeHtml(p.code||'')} · ${escapeHtml(p.title)}</option>`).join('');
+    state.properties.map(p => `<option value="${p.id}" ${prefill.property_id===p.id?'selected':''}>${escapeHtml(p.code||'')} · ${escapeHtml(p.title)}</option>`).join('');
+
+  // Modo edición: prefijar todos los campos
+  const isEdit = !!prefill.id;
+  $('#modalTitle').textContent = isEdit ? 'Editar proyecto' : 'Nuevo proyecto';
+  $('#saveProjectBtn').textContent = isEdit ? 'Guardar cambios' : 'Crear proyecto';
+  if (isEdit){
+    f.querySelector('input[name="id"]').value = prefill.id;
+    f.querySelector('input[name="title"]').value      = prefill.title || '';
+    f.querySelector('select[name="kind"]').value      = prefill.kind || 'cliente';
+    f.querySelector('select[name="service"]').value   = prefill.service || 'Vivienda';
+    if (prefill.budget_usd) f.querySelector('input[name="budget_usd"]').value = prefill.budget_usd;
+    if (prefill.area_m2)    f.querySelector('input[name="area_m2"]').value    = prefill.area_m2;
+    f.querySelector('select[name="stage"]').value     = prefill.stage || 'prospeccion';
+    if (prefill.due_date)   f.querySelector('input[name="due_date"]').value   = prefill.due_date;
+    if (prefill.notes)      f.querySelector('textarea[name="notes"]').value   = prefill.notes;
+  } else {
+    f.querySelector('input[name="id"]').value = '';
+  }
   $('#modal').classList.add('open');
 }
 function closeModal(){ $('#modal').classList.remove('open'); $('#newProjectForm').reset(); }
@@ -1640,15 +1808,22 @@ async function saveExpense(){
 
 function openActivityModal(prefill = {}){
   const f = $('#newActivityForm');
-  // proyecto: solo proyectos del cliente, si hay
+  // proyecto: si viene proyecto, deducimos el cliente; si viene cliente, filtramos sus proyectos
+  let clientId = prefill.client_id;
+  if (prefill.project_id){
+    const pp = state.projects.find(x => x.id === prefill.project_id);
+    if (pp && pp.client_id) clientId = pp.client_id;
+  }
   const projSel = f.querySelector('select[name="project_id"]');
-  const clientId = prefill.client_id;
   const projects = clientId
-    ? state.projects.filter(p => p.client_id === clientId)
+    ? state.projects.filter(p => p.client_id === clientId || p.id === prefill.project_id)
     : state.projects;
   projSel.innerHTML = '<option value="">— Sin proyecto asociado —</option>' +
-    projects.map(p => `<option value="${p.id}">${escapeHtml(p.code||'')} · ${escapeHtml(p.title)}</option>`).join('');
+    projects.map(p => `<option value="${p.id}" ${prefill.project_id===p.id?'selected':''}>${escapeHtml(p.code||'')} · ${escapeHtml(p.title)}</option>`).join('');
   f.querySelector('input[name="client_id"]').value = clientId || '';
+  // Si no hay cliente (proyecto propio), permitir actividad sin cliente — pero saveActivity exige client_id.
+  // Solución: si no hay cliente, usamos el id del proyecto como fallback no es válido; mejor dejamos hacer al usuario.
+  // Para proyectos propios sin cliente, registrar la actividad NO requiere cliente (lo desactivamos en validación).
   // hora actual
   const now = new Date(Date.now() - new Date().getTimezoneOffset()*60000)
                 .toISOString().slice(0,16);
@@ -1660,10 +1835,12 @@ function closeActivityModal(){ $('#modalActivity').classList.remove('open'); $('
 async function saveActivity(){
   const f = $('#newActivityForm');
   const data = Object.fromEntries(new FormData(f));
-  if (!data.client_id)  { toast('Falta el cliente', true); return; }
   if (!data.title)      { toast('Falta el título', true); return; }
   if (!data.occurred_at){ toast('Falta la fecha', true); return; }
   if (!data.project_id) data.project_id = null;
+  if (!data.client_id)  data.client_id  = null;
+  // Si no hay ni cliente ni proyecto, no aporta nada — pedimos al menos uno.
+  if (!data.client_id && !data.project_id){ toast('Asocia la actividad a un cliente o un proyecto', true); return; }
   // datetime-local devuelve "YYYY-MM-DDTHH:mm" (sin timezone) — lo convertimos a ISO
   data.occurred_at = new Date(data.occurred_at).toISOString();
 
@@ -1679,10 +1856,12 @@ async function saveActivity(){
   const { data:row, error } = await sb.from('activities').insert(data).select('*').single();
   if (error) { toast('Error guardando: ' + error.message, true); return; }
   state.activities.unshift(row);
-  // refresca last_activity del cliente
-  await sb.from('clients').update({ last_activity: row.occurred_at }).eq('id', row.client_id);
-  const c = state.clients.find(x => x.id === row.client_id);
-  if (c) c.last_activity = row.occurred_at;
+  // refresca last_activity del cliente (si hay)
+  if (row.client_id){
+    await sb.from('clients').update({ last_activity: row.occurred_at }).eq('id', row.client_id);
+    const c = state.clients.find(x => x.id === row.client_id);
+    if (c) c.last_activity = row.occurred_at;
+  }
   closeActivityModal();
   toast('Actividad registrada');
   render();
@@ -1703,6 +1882,9 @@ async function markExpensePaid(id){
 async function saveProject(){
   const f = $('#newProjectForm');
   const data = Object.fromEntries(new FormData(f));
+  const isEdit = !!data.id;
+  const editId = data.id;
+  delete data.id;
   if (!data.title) { toast('Falta el título', true); return; }
   if (!data.client_id) data.client_id = null;
   if (!data.property_id) data.property_id = null;
@@ -1710,7 +1892,23 @@ async function saveProject(){
   if (data.area_m2 === '')   delete data.area_m2;   else data.area_m2   = Number(data.area_m2);
   if (data.due_date === '')  delete data.due_date;
   if (!data.stage) data.stage = 'prospeccion';
-  // generate code
+
+  if (isEdit){
+    if (DEMO_MODE){
+      const idx = state.projects.findIndex(x => x.id === editId);
+      if (idx >= 0) state.projects[idx] = { ...state.projects[idx], ...data };
+      state.selectedProject = state.projects[idx];
+      closeModal(); toast('Proyecto actualizado (demo)'); render(); return;
+    }
+    const { data:row, error } = await sb.from('projects').update(data).eq('id', editId).select('*').single();
+    if (error){ toast('Error: '+error.message, true); return; }
+    const idx = state.projects.findIndex(x => x.id === editId);
+    if (idx >= 0) state.projects[idx] = row;
+    state.selectedProject = row;
+    closeModal(); toast('Proyecto actualizado'); render(); return;
+  }
+
+  // Crear nuevo
   const yr = new Date().getFullYear();
   const next = state.projects.filter(p => (p.code||'').startsWith('P-'+yr+'-')).length + 1;
   data.code = 'P-' + yr + '-' + String(next).padStart(3, '0');
@@ -1732,6 +1930,27 @@ async function saveProject(){
   render();
 }
 
+async function setProjectStage(projectId, newStage){
+  const proj = state.projects.find(p => p.id === projectId);
+  if (!proj || proj.stage === newStage) return;
+  const old = proj.stage;
+  proj.stage = newStage; proj.days_in_stage = 0;
+  if (state.selectedProject?.id === projectId) state.selectedProject = proj;
+  render();
+  if (DEMO_MODE){ toast('Etapa: ' + stageLabel(newStage) + ' (demo)'); return; }
+  const { error } = await sb.from('projects').update({ stage: newStage, days_in_stage: 0 }).eq('id', projectId);
+  if (error){ proj.stage = old; render(); toast('Error: '+error.message, true); }
+  else toast('Etapa actualizada: ' + stageLabel(newStage));
+}
+
+function openProject(id){
+  const p = state.projects.find(x => x.id === id);
+  if (!p) return;
+  state.selectedProject = p;
+  state.routeFrom = state.route;
+  setRoute('project');
+}
+
 //// ----------------------- INIT --------------------------
 document.addEventListener('click', e => {
   const markPaid = e.target.closest('[data-mark-paid]');
@@ -1743,14 +1962,30 @@ document.addEventListener('click', e => {
     if (act === 'new-project'){ openModal({ client_id: a.dataset.clientId }); }
     if (act === 'close-modal') closeModal();
     if (act === 'save-project') saveProject();
-    if (act === 'new-expense'){ openExpenseModal({ project_id: a.dataset.projectId }); }
+    if (act === 'new-expense'){
+      openExpenseModal({ project_id: a.dataset.projectId });
+    }
     if (act === 'close-expense') closeExpenseModal();
     if (act === 'save-expense') saveExpense();
-    if (act === 'new-activity'){ openActivityModal({ client_id: a.dataset.clientId }); }
+    if (act === 'new-activity'){
+      openActivityModal({ client_id: a.dataset.clientId, project_id: a.dataset.projectId });
+    }
     if (act === 'close-activity') closeActivityModal();
     if (act === 'save-activity') saveActivity();
-    if (act === 'back') setRoute('clients');
+    if (act === 'edit-project'){
+      const pid = a.dataset.projectId;
+      const proj = state.projects.find(p => p.id === pid);
+      if (proj) openModal(proj);
+    }
+    if (act === 'back') setRoute(state.routeFrom || 'clients');
+    if (act === 'back-to-from') setRoute(state.routeFrom || 'pipeline');
     if (act === 'reload') reloadAll();
+  }
+  // click en una fila con data-project-id abre el detalle del proyecto
+  const projRow = e.target.closest('[data-project-id-row]');
+  if (projRow && !a){
+    openProject(projRow.dataset.projectIdRow);
+    return;
   }
   const r = e.target.closest('[data-route]');
   if (r && !a){
