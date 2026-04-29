@@ -585,8 +585,21 @@ td.strong{color:var(--text)}
           </div>
         </div>
         <div class="field">
-          <label>Descripción</label>
+          <label>Concepto</label>
           <input name="description" required placeholder="Ej. Cemento Holcim 50kg x 200 sacos" />
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>N° de factura <span style="color:#666;font-weight:400">— déjalo vacío si no tienes</span></label>
+            <input name="invoice_number" placeholder="001-001-000123456" />
+          </div>
+          <div class="field">
+            <label>Estado</label>
+            <select name="status">
+              <option value="pendiente">Pendiente</option>
+              <option value="pagado">Pagado</option>
+            </select>
+          </div>
         </div>
         <div class="field-row">
           <div class="field">
@@ -608,11 +621,8 @@ td.strong{color:var(--text)}
           <input name="vendor" placeholder="Si no lo tienes en la lista" />
         </div>
         <div class="field">
-          <label>Estado</label>
-          <select name="status">
-            <option value="pendiente">Pendiente</option>
-            <option value="pagado">Pagado</option>
-          </select>
+          <label>Descripción / Detalle <span style="color:#666;font-weight:400">— opcional</span></label>
+          <textarea name="notes" placeholder="Notas, observaciones, condiciones, número de albarán, lo que necesites..."></textarea>
         </div>
       </form>
     </div>
@@ -1481,15 +1491,21 @@ function viewExpenses(){
   const f = state.expenseFilters;
   let list = state.expenses.slice();
   if (f.category !== 'all') list = list.filter(e => e.category === f.category);
-  if (f.status   !== 'all') list = list.filter(e => e.status   === f.status);
+  if (f.status === 'no_invoice') {
+    list = list.filter(e => !e.invoice_number || !String(e.invoice_number).trim());
+  } else if (f.status !== 'all') {
+    list = list.filter(e => e.status === f.status);
+  }
   if (f.project  !== 'all') list = list.filter(e => e.project_id === f.project);
   list.sort((a,b) => new Date(b.spent_on) - new Date(a.spent_on));
 
-  const totalAll      = state.expenses.reduce((s,e)=>s + Number(e.amount_usd||0), 0);
-  const totalPaid     = state.expenses.filter(e=>e.status==='pagado').reduce((s,e)=>s + Number(e.amount_usd||0), 0);
-  const totalPending  = totalAll - totalPaid;
-  const totalBudget   = state.projects.reduce((s,p)=>s + Number(p.budget_usd||0), 0);
-  const pctBudget     = totalBudget ? Math.round(totalAll / totalBudget * 100) : 0;
+  const totalAll       = state.expenses.reduce((s,e)=>s + Number(e.amount_usd||0), 0);
+  const totalPaid      = state.expenses.filter(e=>e.status==='pagado').reduce((s,e)=>s + Number(e.amount_usd||0), 0);
+  const totalPending   = totalAll - totalPaid;
+  const noInvoice      = state.expenses.filter(e=>!e.invoice_number || !String(e.invoice_number).trim());
+  const noInvoiceTotal = noInvoice.reduce((s,e)=>s + Number(e.amount_usd||0), 0);
+  const totalBudget    = state.projects.reduce((s,p)=>s + Number(p.budget_usd||0), 0);
+  const pctBudget      = totalBudget ? Math.round(totalAll / totalBudget * 100) : 0;
 
   // Top 5 proyectos más caros
   const byProject = {};
@@ -1533,7 +1549,7 @@ function viewExpenses(){
         ${kpi('Total gastado',       fmtMoney(totalAll),     null, true,  'todos los proyectos',      pseudoSeries(totalAll||1000), true)}
         ${kpi('Pagado',              fmtMoney(totalPaid),    null, true,  'efectivo + transferencia', pseudoSeries(totalPaid||500))}
         ${kpi('Pendiente de pago',   fmtMoney(totalPending), null, false, 'a proveedores',            pseudoSeries(totalPending||300))}
-        ${kpi('% sobre presupuesto', pctBudget + '%',        null, true,  'gastado / presupuestado',  pseudoSeries(pctBudget||10))}
+        ${kpi('Sin factura',         fmtMoney(noInvoiceTotal), null, false, noInvoice.length + ' gastos sin comprobante', pseudoSeries(noInvoiceTotal||100))}
       </div>
 
       <div class="dash-grid">
@@ -1602,6 +1618,7 @@ function viewExpenses(){
                 <option value="all" ${f.status==='all'?'selected':''}>Todos los estados</option>
                 <option value="pendiente" ${f.status==='pendiente'?'selected':''}>Pendiente</option>
                 <option value="pagado" ${f.status==='pagado'?'selected':''}>Pagado</option>
+                <option value="no_invoice" ${f.status==='no_invoice'?'selected':''}>Sin factura</option>
               </select>
               <select id="fltProject" class="btn" style="padding:6px 10px">
                 <option value="all">Todos los proyectos</option>
@@ -1611,21 +1628,23 @@ function viewExpenses(){
           </div>
           <table>
             <thead><tr>
-              <th>Fecha</th><th>Descripción</th><th>Proyecto</th><th>Categoría</th><th>Proveedor</th><th class="right">Monto</th><th>Estado</th><th></th>
+              <th>Fecha</th><th>Concepto</th><th>Asociado a</th><th>Categoría</th><th>Proveedor</th><th>Factura</th><th class="right">Monto</th><th>Estado</th><th></th>
             </tr></thead>
             <tbody>
-              ${list.length===0 ? `<tr><td colspan="8" style="padding:40px;text-align:center;color:#666">Sin gastos. <button class="btn ghost" data-action="new-expense">Registrar el primero</button></td></tr>` :
+              ${list.length===0 ? `<tr><td colspan="9" style="padding:40px;text-align:center;color:#666">Sin gastos. <button class="btn ghost" data-action="new-expense">Registrar el primero</button></td></tr>` :
                 list.map(e => {
                   const p = state.projects.find(x => x.id === e.project_id);
                   const t = state.properties.find(x => x.id === e.property_id);
                   const ven = e.vendor_id ? vendorName(e.vendor_id) : (e.vendor || '—');
+                  const hasInv = e.invoice_number && String(e.invoice_number).trim();
                   return `
-                    <tr>
+                    <tr title="${e.notes ? escapeHtml(e.notes).replace(/"/g,'&quot;') : ''}">
                       <td class="mono muted" data-label="Fecha">${fmtDate(e.spent_on)}</td>
-                      <td class="strong" data-label="Descripción">${escapeHtml(e.description)}</td>
+                      <td class="strong" data-label="Concepto">${escapeHtml(e.description)}${e.notes?`<div style="font-size:10px;color:#666;margin-top:2px;font-weight:400">${escapeHtml(e.notes.substring(0,80))}${e.notes.length>80?'…':''}</div>`:''}</td>
                       <td class="dim" data-label="Asociado">${p ? escapeHtml(p.title) : (t ? '🏗 '+escapeHtml(t.title) : '—')}</td>
                       <td data-label="Categoría"><span class="pill">${expCatLabel(e.category)}</span></td>
                       <td class="dim" data-label="Proveedor">${escapeHtml(ven)}</td>
+                      <td data-label="Factura">${hasInv?`<span class="mono" style="font-size:11px">${escapeHtml(e.invoice_number)}</span>`:`<span class="pill warn" style="font-size:10px">Sin factura</span>`}</td>
                       <td class="strong right mono" data-label="Monto">${fmtMoneyExact(e.amount_usd)}</td>
                       <td data-label="Estado"><span class="pill ${e.status==='pagado'?'ok':'warn'}">${e.status==='pagado'?'Pagado':'Pendiente'}</span></td>
                       <td class="last-col" style="white-space:nowrap;text-align:right">
@@ -2341,7 +2360,8 @@ function openExpenseModal(prefill = {}){
     f.querySelector('input[name="amount_usd"]').value = prefill.amount_usd ?? '';
     f.querySelector('input[name="spent_on"]').value = prefill.spent_on ?? new Date().toISOString().slice(0,10);
     f.querySelector('select[name="status"]').value = prefill.status || 'pendiente';
-    // si tenía un vendor texto antiguo, lo metemos como respaldo
+    f.querySelector('input[name="invoice_number"]').value = prefill.invoice_number || '';
+    f.querySelector('textarea[name="notes"]').value = prefill.notes || '';
     if (prefill.vendor && !prefill.vendor_id) f.querySelector('input[name="vendor"]').value = prefill.vendor;
   } else {
     f.querySelector('input[name="spent_on"]').value = new Date().toISOString().slice(0,10);
@@ -2389,6 +2409,9 @@ async function saveExpense(){
   if (data.vendor === '') delete data.vendor;
   // si hay vendor_id, fallback de texto: poner el nombre del vendor
   if (data.vendor_id) data.vendor = vendorName(data.vendor_id) || data.vendor || null;
+  // factura y notas vacías → null en BD
+  if (data.invoice_number === '') data.invoice_number = null;
+  if (data.notes === '')          data.notes          = null;
 
   if (isEdit){
     if (DEMO_MODE){
