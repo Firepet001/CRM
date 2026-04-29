@@ -366,6 +366,10 @@ td.strong{color:var(--text)}
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="9.5" y="4" width="5" height="11" rx="1"/><rect x="16" y="4" width="5" height="7" rx="1"/></svg>
         <span style="flex:1">Pipeline</span>
       </button>
+      <button class="nav-item" data-route="projects-list">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+        <span style="flex:1">Proyectos</span>
+      </button>
       <button class="nav-item" data-route="properties">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>
         <span style="flex:1">Terrenos</span>
@@ -373,6 +377,10 @@ td.strong{color:var(--text)}
       <button class="nav-item" data-route="expenses">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h3"/></svg>
         <span style="flex:1">Gastos</span>
+      </button>
+      <button class="nav-item" data-route="vendors">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 7l3-4h12l3 4M3 7v13a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V7M3 7h18M9 12h6"/></svg>
+        <span style="flex:1">Proveedores</span>
       </button>
 
       <div class="nav-label" style="padding-top:18px">Equipo</div>
@@ -583,12 +591,21 @@ td.strong{color:var(--text)}
         <div class="field-row">
           <div class="field">
             <label>Proveedor</label>
-            <input name="vendor" placeholder="Distribuidora Loja" />
+            <div style="display:flex;gap:6px">
+              <select name="vendor_id" style="flex:1">
+                <option value="">— Sin proveedor / Otro —</option>
+              </select>
+              <button type="button" class="btn" data-action="new-vendor-from-expense" title="Crear nuevo proveedor" style="padding:8px 10px">+</button>
+            </div>
           </div>
           <div class="field">
             <label>Fecha del gasto</label>
             <input name="spent_on" type="date" required />
           </div>
+        </div>
+        <div class="field" id="vendorTextField" style="display:none">
+          <label>Nombre del proveedor (texto libre)</label>
+          <input name="vendor" placeholder="Si no lo tienes en la lista" />
         </div>
         <div class="field">
           <label>Estado</label>
@@ -602,6 +619,72 @@ td.strong{color:var(--text)}
     <div class="modal-foot">
       <button class="btn" data-action="close-expense">Cancelar</button>
       <button class="btn primary" data-action="save-expense">Registrar gasto</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Nuevo / Editar Proveedor -->
+<div class="modal-backdrop" id="modalVendor">
+  <div class="modal" role="dialog" aria-labelledby="modalVendorTitle">
+    <div class="modal-head">
+      <h3 id="modalVendorTitle">Nuevo proveedor</h3>
+      <button class="btn icon" data-action="close-vendor" aria-label="Cerrar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 6l12 12M6 18L18 6"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="newVendorForm">
+        <input type="hidden" name="id" />
+        <div class="field">
+          <label>Nombre del proveedor</label>
+          <input name="name" required placeholder="Ej. Distribuidora Loja" />
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Categoría principal</label>
+            <select name="category">
+              <option value="">— Sin especificar —</option>
+              <option value="materiales">Materiales</option>
+              <option value="mano_obra">Mano de obra</option>
+              <option value="transporte">Transporte</option>
+              <option value="permisos">Permisos / Honorarios</option>
+              <option value="subcontratos">Subcontratos</option>
+              <option value="equipos">Equipos / Alquiler</option>
+              <option value="otros">Otros</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>RUC / Cédula</label>
+            <input name="ruc" placeholder="1900xxxxxx001" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Persona de contacto</label>
+          <input name="contact_name" placeholder="Ej. Ing. Carlos Pérez" />
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Teléfono</label>
+            <input name="phone" placeholder="+593 99 ..." />
+          </div>
+          <div class="field">
+            <label>Email</label>
+            <input name="email" type="email" placeholder="ventas@proveedor.ec" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Dirección</label>
+          <input name="address" placeholder="Calle, número, ciudad" />
+        </div>
+        <div class="field">
+          <label>Notas</label>
+          <textarea name="notes" placeholder="Condiciones, observaciones, calidad del servicio..."></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-action="close-vendor">Cancelar</button>
+      <button class="btn primary" data-action="save-vendor" id="saveVendorBtn">Crear proveedor</button>
     </div>
   </div>
 </div>
@@ -831,12 +914,14 @@ const state = {
   projects: [],
   activities: [],
   expenses: [],
+  vendors: [],
   selectedClient: null,
   selectedProject: null,
   selectedProperty: null,
   routeFrom: 'dashboard',
   filters: { query: '', status: 'all', sort: { key: 'last_activity', dir: 'desc' } },
-  expenseFilters: { category: 'all', status: 'all', project: 'all' }
+  expenseFilters: { category: 'all', status: 'all', project: 'all' },
+  projectFilters: { status: 'active' }   // active | closed | all
 };
 
 const EXPENSE_CATS = [
@@ -953,31 +1038,33 @@ async function loadAll(){
     state.projects   = JSON.parse(JSON.stringify(DEMO.projects));
     state.activities = JSON.parse(JSON.stringify(DEMO.activities));
     state.expenses   = JSON.parse(JSON.stringify(DEMO.expenses));
+    state.vendors    = [];
     return;
   }
-  // timeout manual: si Supabase no responde en 6s, asumimos que no está y caemos a demo
   const withTimeout = (p, ms=6000) => Promise.race([
     p,
     new Promise((_, rj) => setTimeout(() => rj(new Error('timeout — Supabase no respondió en ' + ms + 'ms')), ms))
   ]);
-  const [c, p, pr, a, ex] = await withTimeout(Promise.all([
+  const [c, p, pr, a, ex, vn] = await withTimeout(Promise.all([
     sb.from('clients').select('*').order('last_activity', { ascending:false, nullsFirst:false }),
     sb.from('properties').select('*').order('code'),
     sb.from('projects').select('*').order('created_at', { ascending:false }),
     sb.from('activities').select('*').order('occurred_at', { ascending:false }).limit(200),
-    sb.from('expenses').select('*').order('spent_on', { ascending:false })
+    sb.from('expenses').select('*').order('spent_on', { ascending:false }),
+    sb.from('vendors').select('*').order('name')
   ]));
   if (c.error)  throw c.error;
   if (p.error)  throw p.error;
   if (pr.error) throw pr.error;
   if (a.error)  throw a.error;
-  // expenses puede no existir si no han ejecutado el SQL nuevo — degradamos
   state.clients    = c.data || [];
   state.properties = p.data || [];
   state.projects   = pr.data || [];
   state.activities = a.data || [];
   state.expenses   = (ex && !ex.error) ? (ex.data || []) : [];
-  if (ex && ex.error) console.warn('No pude leer expenses (¿tabla aún no creada?):', ex.error.message);
+  state.vendors    = (vn && !vn.error) ? (vn.data || []) : [];
+  if (ex && ex.error) console.warn('No pude leer expenses:', ex.error.message);
+  if (vn && vn.error) console.warn('No pude leer vendors (¿migración pendiente?):', vn.error.message);
 }
 
 // Helper: total gastado en un proyecto
@@ -1530,22 +1617,152 @@ function viewExpenses(){
               ${list.length===0 ? `<tr><td colspan="8" style="padding:40px;text-align:center;color:#666">Sin gastos. <button class="btn ghost" data-action="new-expense">Registrar el primero</button></td></tr>` :
                 list.map(e => {
                   const p = state.projects.find(x => x.id === e.project_id);
+                  const t = state.properties.find(x => x.id === e.property_id);
+                  const ven = e.vendor_id ? vendorName(e.vendor_id) : (e.vendor || '—');
                   return `
                     <tr>
                       <td class="mono muted" data-label="Fecha">${fmtDate(e.spent_on)}</td>
                       <td class="strong" data-label="Descripción">${escapeHtml(e.description)}</td>
-                      <td class="dim" data-label="Proyecto">${escapeHtml(p?.title || '—')}</td>
+                      <td class="dim" data-label="Asociado">${p ? escapeHtml(p.title) : (t ? '🏗 '+escapeHtml(t.title) : '—')}</td>
                       <td data-label="Categoría"><span class="pill">${expCatLabel(e.category)}</span></td>
-                      <td class="dim" data-label="Proveedor">${escapeHtml(e.vendor || '—')}</td>
+                      <td class="dim" data-label="Proveedor">${escapeHtml(ven)}</td>
                       <td class="strong right mono" data-label="Monto">${fmtMoneyExact(e.amount_usd)}</td>
                       <td data-label="Estado"><span class="pill ${e.status==='pagado'?'ok':'warn'}">${e.status==='pagado'?'Pagado':'Pendiente'}</span></td>
-                      <td class="last-col">${e.status==='pendiente'?`<button class="btn icon" data-mark-paid="${e.id}" title="Marcar pagado">✓</button>`:''}</td>
+                      <td class="last-col" style="white-space:nowrap;text-align:right">
+                        ${e.status==='pendiente'?`<button class="btn icon" data-mark-paid="${e.id}" title="Marcar pagado">✓</button>`:''}
+                        <button class="btn icon" data-action="edit-expense" data-expense-id="${e.id}" title="Editar">✎</button>
+                        <button class="btn icon" data-action="delete-expense" data-expense-id="${e.id}" title="Eliminar" style="color:var(--danger)">🗑</button>
+                      </td>
                     </tr>`;
                 }).join('')
               }
             </tbody>
           </table>
         </div>
+      </div>
+    </div>`;
+}
+
+// ===== Vendors =====
+function viewVendors(){
+  const list = state.vendors.slice().sort((a,b) => a.name.localeCompare(b.name));
+  // Total gastado por proveedor
+  const sumByVendor = {};
+  state.expenses.forEach(e => {
+    if (e.vendor_id) sumByVendor[e.vendor_id] = (sumByVendor[e.vendor_id]||0) + Number(e.amount_usd||0);
+  });
+
+  return `
+    <div class="page">
+      <div class="page-header">
+        <div>
+          <div class="page-eyebrow">Directorio</div>
+          <h1 class="page-title">Proveedores <span class="count">${list.length}</span></h1>
+          <div class="page-sub">Maestro de proveedores. Lo seleccionas al registrar gastos para no escribir el nombre cada vez.</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn primary" data-action="new-vendor">+ Nuevo proveedor</button>
+        </div>
+      </div>
+
+      <div class="card flush">
+        <table>
+          <thead><tr>
+            <th>Nombre</th><th>Categoría</th><th>Contacto</th><th>Teléfono</th><th>RUC</th><th class="right">Gastado total</th><th></th>
+          </tr></thead>
+          <tbody>
+            ${list.length===0?`<tr><td colspan="7" style="padding:40px;text-align:center;color:#666">Aún no hay proveedores. <button class="btn ghost" data-action="new-vendor">Crear el primero</button></td></tr>`:
+            list.map(v => {
+              const total = sumByVendor[v.id] || 0;
+              return `
+                <tr>
+                  <td class="strong" data-label="Nombre">${escapeHtml(v.name)}</td>
+                  <td data-label="Categoría">${v.category?`<span class="pill" style="font-size:10px">${expCatLabel(v.category)}</span>`:'<span class="dim">—</span>'}</td>
+                  <td class="dim" data-label="Contacto">${escapeHtml(v.contact_name||'—')}</td>
+                  <td class="dim" data-label="Teléfono">${escapeHtml(v.phone||'—')}</td>
+                  <td class="dim mono" data-label="RUC">${escapeHtml(v.ruc||'—')}</td>
+                  <td class="strong right mono" data-label="Total">${total>0?fmtMoney(total):'<span style="color:#666">—</span>'}</td>
+                  <td class="last-col" style="text-align:right;white-space:nowrap">
+                    <button class="btn icon" data-action="edit-vendor" data-vendor-id="${v.id}" title="Editar">✎</button>
+                    <button class="btn icon" data-action="delete-vendor" data-vendor-id="${v.id}" title="Eliminar" style="color:var(--danger)">🗑</button>
+                  </td>
+                </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+// ===== Projects List =====
+function viewProjectsList(){
+  const f = state.projectFilters;
+  let list = state.projects.slice();
+  if (f.status === 'active') list = list.filter(p => p.stage !== 'entrega');
+  if (f.status === 'closed') list = list.filter(p => p.stage === 'entrega');
+  list.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+
+  const counts = {
+    all: state.projects.length,
+    active: state.projects.filter(p => p.stage !== 'entrega').length,
+    closed: state.projects.filter(p => p.stage === 'entrega').length,
+  };
+
+  return `
+    <div class="page">
+      <div class="page-header">
+        <div>
+          <div class="page-eyebrow">Cartera de obra</div>
+          <h1 class="page-title">Proyectos <span class="count">${list.length}</span></h1>
+        </div>
+        <div class="page-actions">
+          <button class="btn primary" data-action="new-project">+ Nuevo proyecto</button>
+        </div>
+      </div>
+
+      <div class="filters">
+        <div class="tabs">
+          ${['active','closed','all'].map(s => `
+            <button data-pfilter="${s}" class="${f.status===s?'active':''}">
+              ${({active:'Activos',closed:'Cerrados',all:'Todos'})[s]}
+              <span class="count">${counts[s]}</span>
+            </button>`).join('')}
+        </div>
+      </div>
+
+      <div class="card flush">
+        <table>
+          <thead><tr>
+            <th>Código</th><th>Proyecto</th><th>Tipo</th><th>Cliente / Terreno</th><th>Etapa</th><th class="right">Revenue</th><th class="right">Gastado</th><th class="right">Margen</th><th class="right">Cierre</th>
+          </tr></thead>
+          <tbody>
+            ${list.length===0?`<tr><td colspan="9" style="padding:40px;text-align:center;color:#666">Sin proyectos en este filtro.</td></tr>`:list.map(p => {
+              const c = state.clients.find(x => x.id === p.client_id);
+              const terreno = state.properties.find(x => x.id === p.property_id);
+              const isOwn = p.kind === 'propio';
+              const obraSpent = projectSpent(p.id);
+              const tCost = (isOwn && terreno) ? (Number(terreno.price_usd||0) + propertySpent(terreno.id)) : 0;
+              const totalSpent = obraSpent + tCost;
+              const revenue = isOwn ? Number(p.sale_price_usd||0) : Number(p.budget_usd||0);
+              const margin = revenue - totalSpent;
+              return `
+                <tr data-project-id-row="${p.id}">
+                  <td class="mono muted" data-label="Código">${escapeHtml(p.code||'—')}</td>
+                  <td class="strong" data-label="Proyecto">${escapeHtml(p.title)}</td>
+                  <td data-label="Tipo"><span class="pill kind-${p.kind}">${isOwn?'Propio':'Cliente'}</span></td>
+                  <td class="dim" data-label="Cliente/Terreno">${
+                    c ? escapeHtml(c.name) :
+                    (terreno ? '🏗 '+escapeHtml(terreno.code) : '—')
+                  }</td>
+                  <td data-label="Etapa"><span class="pill ${p.stage==='entrega'?'gold':''}">${stageLabel(p.stage)}</span></td>
+                  <td class="strong right mono" data-label="Revenue">${fmtMoney(revenue)}</td>
+                  <td class="dim right mono" data-label="Gastado">${fmtMoney(totalSpent)}</td>
+                  <td class="right mono" style="color:${margin>=0?'var(--success)':'var(--danger)'}" data-label="Margen">${fmtMoney(margin)}</td>
+                  <td class="muted right mono" data-label="Cierre">${fmtDate(p.due_date)}</td>
+                </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
       </div>
     </div>`;
 }
@@ -1624,16 +1841,23 @@ function viewPropertyDetail(){
             <table>
               <thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Proveedor</th><th class="right">Monto</th><th>Estado</th><th></th></tr></thead>
               <tbody>
-                ${exps.map(e => `
+                ${exps.map(e => {
+                  const ven = e.vendor_id ? vendorName(e.vendor_id) : (e.vendor || '—');
+                  return `
                   <tr>
                     <td class="mono muted" data-label="Fecha">${fmtDate(e.spent_on)}</td>
                     <td class="strong" data-label="Descripción">${escapeHtml(e.description)}</td>
                     <td data-label="Categoría"><span class="pill" style="font-size:10px">${expCatLabel(e.category)}</span></td>
-                    <td class="dim" data-label="Proveedor">${escapeHtml(e.vendor||'—')}</td>
+                    <td class="dim" data-label="Proveedor">${escapeHtml(ven)}</td>
                     <td class="strong right mono" data-label="Monto">${fmtMoneyExact(e.amount_usd)}</td>
                     <td data-label="Estado"><span class="pill ${e.status==='pagado'?'ok':'warn'}" style="font-size:10px">${e.status==='pagado'?'Pagado':'Pendiente'}</span></td>
-                    <td class="last-col">${e.status==='pendiente'?`<button class="btn icon" data-mark-paid="${e.id}" title="Marcar pagado">✓</button>`:''}</td>
-                  </tr>`).join('')}
+                    <td class="last-col" style="white-space:nowrap;text-align:right">
+                      ${e.status==='pendiente'?`<button class="btn icon" data-mark-paid="${e.id}" title="Marcar pagado">✓</button>`:''}
+                      <button class="btn icon" data-action="edit-expense" data-expense-id="${e.id}" title="Editar">✎</button>
+                      <button class="btn icon" data-action="delete-expense" data-expense-id="${e.id}" title="Eliminar" style="color:var(--danger)">🗑</button>
+                    </td>
+                  </tr>`;
+                }).join('')}
               </tbody>
             </table>
           `}
@@ -1915,8 +2139,10 @@ function render(){
     case 'properties': html = viewProperties(); break;
     case 'expenses':   html = viewExpenses();   break;
     case 'detail':     html = viewDetail();     break;
-    case 'project':    html = viewProjectDetail(); break;
-    case 'property':   html = viewPropertyDetail(); break;
+    case 'project':       html = viewProjectDetail(); break;
+    case 'property':      html = viewPropertyDetail(); break;
+    case 'vendors':       html = viewVendors(); break;
+    case 'projects-list': html = viewProjectsList(); break;
     default:           html = viewDashboard();
   }
   root.innerHTML = html;
@@ -1974,6 +2200,12 @@ function attachRouteHandlers(){
   if (fc) fc.addEventListener('change', () => { state.expenseFilters.category = fc.value; render(); });
   if (fs) fs.addEventListener('change', () => { state.expenseFilters.status   = fs.value; render(); });
   if (fp) fp.addEventListener('change', () => { state.expenseFilters.project  = fp.value; render(); });
+
+  // Filtros de pestaña Proyectos (activos / cerrados / todos)
+  $$('[data-pfilter]').forEach(b => b.addEventListener('click', () => {
+    state.projectFilters.status = b.dataset.pfilter;
+    render();
+  }));
 
   // Kanban drag&drop
   initKanban();
@@ -2071,27 +2303,57 @@ function openModal(prefill = {}){
 function closeModal(){ $('#modal').classList.remove('open'); $('#newProjectForm').reset(); }
 
 function openExpenseModal(prefill = {}){
-  const projSel = $('#newExpenseForm select[name="project_id"]');
-  const propSel = $('#newExpenseForm select[name="property_id"]');
+  const f = $('#newExpenseForm');
+  // si NO es edición, reseteamos el form para no arrastrar datos previos
+  if (!prefill.id) f.reset();
+
+  const projSel = f.querySelector('select[name="project_id"]');
+  const propSel = f.querySelector('select[name="property_id"]');
+  const vendSel = f.querySelector('select[name="vendor_id"]');
   projSel.innerHTML = state.projects.map(p =>
     `<option value="${p.id}" ${prefill.project_id===p.id?'selected':''}>${escapeHtml(p.code||'')} · ${escapeHtml(p.title)}</option>`
   ).join('');
   propSel.innerHTML = state.properties.map(p =>
     `<option value="${p.id}" ${prefill.property_id===p.id?'selected':''}>${escapeHtml(p.code||'')} · ${escapeHtml(p.title)}</option>`
   ).join('');
+  vendSel.innerHTML = '<option value="">— Sin proveedor / Otro —</option>' +
+    state.vendors.map(v => `<option value="${v.id}" ${prefill.vendor_id===v.id?'selected':''}>${escapeHtml(v.name)}</option>`).join('');
+
+  // input hidden para id (edición)
+  f.querySelector('input[name="id"]')?.remove();
+  if (prefill.id){
+    const inp = document.createElement('input');
+    inp.type = 'hidden'; inp.name = 'id'; inp.value = prefill.id;
+    f.prepend(inp);
+  }
 
   // Selección de target (proyecto vs terreno)
   const target = prefill.property_id ? 'property' : 'project';
   setExpenseTarget(target);
+  $$('#expenseTargetTabs button').forEach(b => { b.onclick = () => setExpenseTarget(b.dataset.target); });
 
-  // configurar tabs
-  $$('#expenseTargetTabs button').forEach(b => {
-    b.onclick = () => setExpenseTarget(b.dataset.target);
-  });
+  // Si edición: rellenar campos
+  const isEdit = !!prefill.id;
+  $('#modalExpense .modal-head h3').textContent = isEdit ? 'Editar gasto' : 'Nuevo gasto';
+  if (isEdit){
+    f.querySelector('select[name="category"]').value = prefill.category || 'materiales';
+    f.querySelector('input[name="description"]').value = prefill.description || '';
+    f.querySelector('input[name="amount_usd"]').value = prefill.amount_usd ?? '';
+    f.querySelector('input[name="spent_on"]').value = prefill.spent_on ?? new Date().toISOString().slice(0,10);
+    f.querySelector('select[name="status"]').value = prefill.status || 'pendiente';
+    // si tenía un vendor texto antiguo, lo metemos como respaldo
+    if (prefill.vendor && !prefill.vendor_id) f.querySelector('input[name="vendor"]').value = prefill.vendor;
+  } else {
+    f.querySelector('input[name="spent_on"]').value = new Date().toISOString().slice(0,10);
+  }
 
-  // fecha por defecto = hoy
-  const today = new Date().toISOString().slice(0,10);
-  $('#newExpenseForm input[name="spent_on"]').value = today;
+  // mostrar campo "vendor texto" solo si no hay vendor_id
+  const toggleVendorText = () => {
+    $('#vendorTextField').style.display = vendSel.value ? 'none' : '';
+  };
+  vendSel.onchange = toggleVendorText;
+  toggleVendorText();
+
   $('#modalExpense').classList.add('open');
 }
 function setExpenseTarget(target){
@@ -2108,21 +2370,44 @@ function closeExpenseModal(){ $('#modalExpense').classList.remove('open'); $('#n
 async function saveExpense(){
   const f = $('#newExpenseForm');
   const data = Object.fromEntries(new FormData(f));
+  const isEdit = !!data.id;
+  const editId = data.id;
+  delete data.id;
+
   if (!data.project_id && !data.property_id) { toast('Asocia el gasto a un proyecto o terreno', true); return; }
   if (!data.description) { toast('Falta la descripción', true); return; }
   if (!data.amount_usd || Number(data.amount_usd) <= 0) { toast('Monto inválido', true); return; }
   data.amount_usd = Number(data.amount_usd);
   if (!data.status) data.status = 'pendiente';
   if (data.status === 'pagado' && !data.paid_on) data.paid_on = data.spent_on;
+  if (data.status === 'pendiente') data.paid_on = null;
+
   // limpia los vacíos para no mandar strings al UUID
   if (!data.project_id)  delete data.project_id;
   if (!data.property_id) delete data.property_id;
+  if (!data.vendor_id)   data.vendor_id = null;
+  if (data.vendor === '') delete data.vendor;
+  // si hay vendor_id, fallback de texto: poner el nombre del vendor
+  if (data.vendor_id) data.vendor = vendorName(data.vendor_id) || data.vendor || null;
+
+  if (isEdit){
+    if (DEMO_MODE){
+      const idx = state.expenses.findIndex(x => x.id === editId);
+      if (idx >= 0) state.expenses[idx] = { ...state.expenses[idx], ...data };
+      closeExpenseModal(); toast('Gasto actualizado (demo)'); render(); return;
+    }
+    const { data:row, error } = await sb.from('expenses').update(data).eq('id', editId).select('*').single();
+    if (error){ toast('Error: '+error.message, true); return; }
+    const idx = state.expenses.findIndex(x => x.id === editId);
+    if (idx >= 0) state.expenses[idx] = row;
+    closeExpenseModal(); toast('Gasto actualizado'); render(); return;
+  }
 
   if (DEMO_MODE){
     const row = { id: 'demo-exp-' + Date.now(), created_at: new Date().toISOString(), ...data };
     state.expenses.unshift(row);
     closeExpenseModal();
-    toast('Gasto registrado en demo · ' + fmtMoneyExact(row.amount_usd));
+    toast('Gasto registrado (demo) · ' + fmtMoneyExact(row.amount_usd));
     render();
     return;
   }
@@ -2130,7 +2415,7 @@ async function saveExpense(){
   const { data:row, error } = await sb.from('expenses').insert(data).select('*').single();
   if (error) {
     if (/relation .* expenses .* does not exist/i.test(error.message)) {
-      toast('La tabla expenses no existe — ejecuta el SQL nuevo', true);
+      toast('La tabla expenses no existe — ejecuta la migración', true);
     } else {
       toast('Error guardando: ' + error.message, true);
     }
@@ -2140,6 +2425,108 @@ async function saveExpense(){
   closeExpenseModal();
   toast('Gasto registrado · ' + fmtMoneyExact(row.amount_usd));
   render();
+}
+
+async function deleteExpense(id){
+  const e = state.expenses.find(x => x.id === id);
+  if (!e) return;
+  if (!confirm('¿Eliminar este gasto?\n\n' + e.description + ' — ' + fmtMoneyExact(e.amount_usd) + '\n\nEsta acción no se puede deshacer.')) return;
+  if (DEMO_MODE){
+    state.expenses = state.expenses.filter(x => x.id !== id);
+    toast('Gasto eliminado (demo)'); render(); return;
+  }
+  const { error } = await sb.from('expenses').delete().eq('id', id);
+  if (error){ toast('Error: '+error.message, true); return; }
+  state.expenses = state.expenses.filter(x => x.id !== id);
+  toast('Gasto eliminado'); render();
+}
+
+function vendorName(id){
+  const v = state.vendors.find(x => x.id === id);
+  return v ? v.name : '';
+}
+
+function openVendorModal(prefill = {}, onSaved){
+  const f = $('#newVendorForm');
+  f.reset();
+  const isEdit = !!prefill.id;
+  $('#modalVendorTitle').textContent = isEdit ? 'Editar proveedor' : 'Nuevo proveedor';
+  $('#saveVendorBtn').textContent    = isEdit ? 'Guardar cambios' : 'Crear proveedor';
+  if (isEdit){
+    f.querySelector('input[name="id"]').value           = prefill.id;
+    f.querySelector('input[name="name"]').value         = prefill.name || '';
+    f.querySelector('select[name="category"]').value    = prefill.category || '';
+    f.querySelector('input[name="ruc"]').value          = prefill.ruc || '';
+    f.querySelector('input[name="contact_name"]').value = prefill.contact_name || '';
+    f.querySelector('input[name="phone"]').value        = prefill.phone || '';
+    f.querySelector('input[name="email"]').value        = prefill.email || '';
+    f.querySelector('input[name="address"]').value      = prefill.address || '';
+    f.querySelector('textarea[name="notes"]').value     = prefill.notes || '';
+  } else {
+    f.querySelector('input[name="id"]').value = '';
+  }
+  // callback de "guardado" para flujo desde modal de gasto
+  state._afterVendorSave = onSaved || null;
+  $('#modalVendor').classList.add('open');
+}
+function closeVendorModal(){ $('#modalVendor').classList.remove('open'); $('#newVendorForm').reset(); state._afterVendorSave = null; }
+
+async function saveVendor(){
+  const f = $('#newVendorForm');
+  const data = Object.fromEntries(new FormData(f));
+  const isEdit = !!data.id;
+  const editId = data.id;
+  delete data.id;
+  if (!data.name) { toast('Falta el nombre', true); return; }
+  ['contact_name','ruc','phone','email','address','notes','category'].forEach(k => {
+    if (data[k] === '') delete data[k];
+  });
+
+  if (isEdit){
+    if (DEMO_MODE){
+      const idx = state.vendors.findIndex(x => x.id === editId);
+      if (idx >= 0) state.vendors[idx] = { ...state.vendors[idx], ...data };
+      closeVendorModal(); toast('Proveedor actualizado (demo)'); render(); return;
+    }
+    const { data:row, error } = await sb.from('vendors').update(data).eq('id', editId).select('*').single();
+    if (error){ toast('Error: '+error.message, true); return; }
+    const idx = state.vendors.findIndex(x => x.id === editId);
+    if (idx >= 0) state.vendors[idx] = row;
+    closeVendorModal(); toast('Proveedor actualizado'); render(); return;
+  }
+
+  if (DEMO_MODE){
+    const row = { id: 'demo-v-' + Date.now(), active: true, created_at: new Date().toISOString(), ...data };
+    state.vendors.push(row);
+    state.vendors.sort((a,b) => a.name.localeCompare(b.name));
+    const cb = state._afterVendorSave;
+    closeVendorModal();
+    toast('Proveedor creado (demo)');
+    if (cb) cb(row); else render();
+    return;
+  }
+  const { data:row, error } = await sb.from('vendors').insert(data).select('*').single();
+  if (error){ toast('Error: '+error.message, true); return; }
+  state.vendors.push(row);
+  state.vendors.sort((a,b) => a.name.localeCompare(b.name));
+  const cb = state._afterVendorSave;
+  closeVendorModal();
+  toast('Proveedor creado · ' + row.name);
+  if (cb) cb(row); else render();
+}
+
+async function deleteVendor(id){
+  const v = state.vendors.find(x => x.id === id);
+  if (!v) return;
+  if (!confirm('¿Eliminar al proveedor "'+v.name+'"? Los gastos antiguos conservan su nombre como texto.')) return;
+  if (DEMO_MODE){
+    state.vendors = state.vendors.filter(x => x.id !== id);
+    toast('Proveedor eliminado (demo)'); render(); return;
+  }
+  const { error } = await sb.from('vendors').delete().eq('id', id);
+  if (error){ toast('Error: '+error.message, true); return; }
+  state.vendors = state.vendors.filter(x => x.id !== id);
+  toast('Proveedor eliminado'); render();
 }
 
 function openPropertyModal(prefill = {}){
@@ -2476,6 +2863,33 @@ document.addEventListener('click', e => {
     }
     if (act === 'close-property') closePropertyModal();
     if (act === 'save-property') saveProperty();
+    if (act === 'new-vendor'){ openVendorModal(); }
+    if (act === 'edit-vendor'){
+      const vid = a.dataset.vendorId;
+      const v = state.vendors.find(x => x.id === vid);
+      if (v) openVendorModal(v);
+    }
+    if (act === 'delete-vendor'){ deleteVendor(a.dataset.vendorId); }
+    if (act === 'close-vendor') closeVendorModal();
+    if (act === 'save-vendor') saveVendor();
+    if (act === 'new-vendor-from-expense'){
+      // crea desde dentro del modal de gasto, al guardar lo selecciona
+      openVendorModal({}, (newVendor) => {
+        // re-render del modal de gasto con el vendor recién creado seleccionado
+        const sel = $('#newExpenseForm select[name="vendor_id"]');
+        const opt = document.createElement('option');
+        opt.value = newVendor.id; opt.textContent = newVendor.name;
+        sel.appendChild(opt);
+        sel.value = newVendor.id;
+        sel.dispatchEvent(new Event('change'));
+      });
+    }
+    if (act === 'edit-expense'){
+      const eid = a.dataset.expenseId;
+      const e = state.expenses.find(x => x.id === eid);
+      if (e) openExpenseModal(e);
+    }
+    if (act === 'delete-expense'){ deleteExpense(a.dataset.expenseId); }
     if (act === 'back') setRoute(state.routeFrom || 'clients');
     if (act === 'back-to-from') setRoute(state.routeFrom || 'pipeline');
     if (act === 'back-to-properties') setRoute('properties');
@@ -2504,6 +2918,7 @@ $('#modalExpense').addEventListener('click', e => { if (e.target.id === 'modalEx
 $('#modalActivity').addEventListener('click', e => { if (e.target.id === 'modalActivity') closeActivityModal(); });
 $('#modalClient').addEventListener('click', e => { if (e.target.id === 'modalClient') closeClientModal(); });
 $('#modalProperty').addEventListener('click', e => { if (e.target.id === 'modalProperty') closePropertyModal(); });
+$('#modalVendor').addEventListener('click', e => { if (e.target.id === 'modalVendor') closeVendorModal(); });
 
 // Filtros de gastos (delegación: se atan en attachRouteHandlers cada render)
 
