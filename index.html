@@ -512,7 +512,7 @@ td.strong{color:var(--text)}
         </div>
         <div class="field-row">
           <div class="field">
-            <label>Etapa inicial</label>
+            <label>Etapa actual</label>
             <select name="stage">
               <option value="prospeccion">Prospección</option>
               <option value="visita">Visita / Terreno</option>
@@ -526,6 +526,10 @@ td.strong{color:var(--text)}
             <label>Fecha de cierre objetivo</label>
             <input name="due_date" type="date" />
           </div>
+        </div>
+        <div class="field">
+          <label>Avance de obra (%)</label>
+          <input name="progress" type="number" min="0" max="100" step="5" placeholder="0" />
         </div>
         <div class="field">
           <label>Notas</label>
@@ -1077,6 +1081,15 @@ async function loadAll(){
   if (vn && vn.error) console.warn('No pude leer vendors (¿migración pendiente?):', vn.error.message);
 }
 
+// Días que un proyecto lleva en su etapa actual (auto desde stage_changed_at)
+function daysInStage(p){
+  if (!p) return 0;
+  const ref = p.stage_changed_at || p.created_at;
+  if (!ref) return p.days_in_stage || 0;
+  const d = (Date.now() - new Date(ref).getTime()) / 86400000;
+  return Math.max(0, Math.floor(d));
+}
+
 // Helper: total gastado en un proyecto
 function projectSpent(projectId){
   return state.expenses.filter(e => e.project_id === projectId)
@@ -1161,7 +1174,7 @@ function viewDashboard(){
   const upcoming = state.activities
     .filter(a => new Date(a.occurred_at) >= new Date(Date.now() - 7*864e5))
     .slice(0, 5);
-  const recent = [...state.projects].sort((a,b)=>(a.days_in_stage||0)-(b.days_in_stage||0)).slice(0,6);
+  const recent = [...state.projects].sort((a,b)=>daysInStage(a)-daysInStage(b)).slice(0,6);
 
   const greeting = new Date().getHours() < 12 ? 'Buenos días' : new Date().getHours() < 19 ? 'Buenas tardes' : 'Buenas noches';
 
@@ -1417,7 +1430,8 @@ function viewPipeline(){
                 ${items.length===0 ? `<div class="empty-drop">Suelta aquí</div>` :
                   items.map(p => {
                     const c = state.clients.find(x => x.id === p.client_id);
-                    const late = (p.days_in_stage||0) > 10 && p.stage !== 'entrega';
+                    const dInStage = daysInStage(p);
+                    const late = dInStage > 10 && p.stage !== 'entrega';
                     const revenue = p.kind === 'propio' ? Number(p.sale_price_usd||0) : Number(p.budget_usd||0);
                     return `
                       <div class="kard" draggable="true" data-id="${p.id}" data-client-id="${c?.id||''}">
@@ -1436,7 +1450,7 @@ function viewPipeline(){
                             <span style="font-size:11px;color:var(--text-muted)">${escapeHtml(c?(c.name.split(' ')[0]):'—')}</span>
                           </div>
                           <span class="mono" style="font-size:10px;color:${late?'var(--danger)':'#666'}">
-                            ${late?'● ':''}${p.days_in_stage||0}d
+                            ${late?'● ':''}${dInStage}d
                           </span>
                         </div>
                       </div>`;
@@ -1961,9 +1975,16 @@ function viewProjectDetail(){
             <dt>Inversión total</dt><dd class="mono">${fmtMoneyExact(totalSpent)} ${revenueRef?`<span style="color:#666;font-size:11px">(${pct}%)</span>`:''}</dd>
             <dt>Margen</dt>     <dd class="mono" style="color:${margin>=0?'var(--success)':'var(--danger)'}">${fmtMoneyExact(margin)} ${revenueRef?`<span style="color:#666;font-size:11px">(${marginPct}%)</span>`:''}</dd>
             <dt>Área</dt>       <dd>${p.area_m2?(Number(p.area_m2).toLocaleString('es-EC')+' m²'):'—'}</dd>
-            <dt>Avance</dt>     <dd>${p.progress||0}%</dd>
+            <dt>Avance</dt>     <dd>
+              <div style="display:flex;align-items:center;gap:8px">
+                <input type="range" min="0" max="100" step="5" value="${p.progress||0}"
+                       data-progress-set="${p.id}"
+                       style="flex:1;accent-color:var(--gold);cursor:pointer">
+                <span class="mono" id="progressLabel-${p.id}" style="min-width:38px;text-align:right;color:var(--gold)">${p.progress||0}%</span>
+              </div>
+            </dd>
             <dt>Cierre</dt>     <dd>${fmtDate(p.due_date)}</dd>
-            <dt>Días en etapa</dt><dd class="mono">${p.days_in_stage||0}</dd>
+            <dt>Días en etapa</dt><dd class="mono">${daysInStage(p)} <span style="color:#666;font-size:10px">desde ${fmtDate(p.stage_changed_at || p.created_at)}</span></dd>
           </dl>
 
           ${includeTerreno?`
@@ -2195,6 +2216,10 @@ function attachRouteHandlers(){
     const projId  = b.dataset.projectId;
     setProjectStage(projId, stageId);
   }));
+  // Slider de avance % de obra
+  $$('[data-progress-set]').forEach(s => s.addEventListener('input', () => {
+    setProjectProgress(s.dataset.progressSet, s.value);
+  }));
   $$('.kard[data-client-id]').forEach(k => k.addEventListener('click', e => {
     if (e.target.closest('[draggable]') && k._wasDrag) { k._wasDrag=false; return; }
   }));
@@ -2306,6 +2331,7 @@ function openModal(prefill = {}){
     if (prefill.area_m2)        f.querySelector('input[name="area_m2"]').value        = prefill.area_m2;
     f.querySelector('select[name="stage"]').value     = prefill.stage || 'prospeccion';
     if (prefill.due_date)   f.querySelector('input[name="due_date"]').value   = prefill.due_date;
+    if (prefill.progress != null) f.querySelector('input[name="progress"]').value = prefill.progress;
     if (prefill.notes)      f.querySelector('textarea[name="notes"]').value   = prefill.notes;
   } else {
     f.querySelector('input[name="id"]').value = '';
@@ -2774,6 +2800,7 @@ async function saveProject(){
   if (data.budget_usd === '')     delete data.budget_usd;     else data.budget_usd     = Number(data.budget_usd);
   if (data.sale_price_usd === '') delete data.sale_price_usd; else data.sale_price_usd = Number(data.sale_price_usd);
   if (data.area_m2 === '')        delete data.area_m2;        else data.area_m2        = Number(data.area_m2);
+  if (data.progress === '')       delete data.progress;       else data.progress       = Math.max(0, Math.min(100, parseInt(data.progress,10)||0));
   if (data.due_date === '')       delete data.due_date;
   if (!data.stage) data.stage = 'prospeccion';
   // Si es proyecto de cliente, no aplica sale_price → forzamos a null
@@ -2820,13 +2847,37 @@ async function setProjectStage(projectId, newStage){
   const proj = state.projects.find(p => p.id === projectId);
   if (!proj || proj.stage === newStage) return;
   const old = proj.stage;
-  proj.stage = newStage; proj.days_in_stage = 0;
+  proj.stage = newStage;
+  proj.stage_changed_at = new Date().toISOString();
+  proj.days_in_stage = 0;
   if (state.selectedProject?.id === projectId) state.selectedProject = proj;
   render();
   if (DEMO_MODE){ toast('Etapa: ' + stageLabel(newStage) + ' (demo)'); return; }
+  // El trigger de Supabase actualiza stage_changed_at automáticamente
   const { error } = await sb.from('projects').update({ stage: newStage, days_in_stage: 0 }).eq('id', projectId);
   if (error){ proj.stage = old; render(); toast('Error: '+error.message, true); }
   else toast('Etapa actualizada: ' + stageLabel(newStage));
+}
+
+// Avance % de obra con slider (debounced para no spamear la BD)
+let _progressTimer = null;
+async function setProjectProgress(projectId, pct){
+  const proj = state.projects.find(p => p.id === projectId);
+  if (!proj) return;
+  pct = Math.max(0, Math.min(100, parseInt(pct,10) || 0));
+  proj.progress = pct;
+  if (state.selectedProject?.id === projectId) state.selectedProject = proj;
+  // actualizar etiqueta sin re-render entero
+  const lbl = document.getElementById('progressLabel-' + projectId);
+  if (lbl) lbl.textContent = pct + '%';
+
+  clearTimeout(_progressTimer);
+  _progressTimer = setTimeout(async () => {
+    if (DEMO_MODE){ toast('Avance: ' + pct + '% (demo)'); return; }
+    const { error } = await sb.from('projects').update({ progress: pct }).eq('id', projectId);
+    if (error) toast('Error guardando avance: '+error.message, true);
+    else toast('Avance: ' + pct + '%');
+  }, 500);
 }
 
 function openProject(id){
