@@ -2975,13 +2975,13 @@ function generateProjectReport(projectId){
   --soft:rgba(0,89,79,.08);--gold-soft:rgba(139,115,85,.10);
   --border:rgba(35,49,45,.10);
 }
-html,body{margin:0;padding:0;background:var(--ivory);color:var(--dark);font-family:'Manrope',sans-serif;font-weight:300;font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
+html,body{margin:0;padding:0;background:var(--ivory);color:var(--dark);font-family:'Manrope',system-ui,sans-serif;font-weight:300;font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-feature-settings:"tnum"}
 strong{font-weight:600}
-.print-bar{position:sticky;top:0;background:var(--dark);color:var(--ivory);padding:12px 24px;display:flex;justify-content:space-between;align-items:center;z-index:10;font-size:12px;letter-spacing:.04em}
+.print-bar{position:fixed;top:0;left:0;right:0;background:var(--dark);color:var(--ivory);padding:12px 24px;display:flex;justify-content:space-between;align-items:center;z-index:10;font-size:12px;letter-spacing:.04em}
 .print-bar button{background:var(--ivory);color:var(--dark);border:none;padding:8px 18px;border-radius:4px;font-weight:600;cursor:pointer;font-family:inherit;font-size:12px;letter-spacing:.04em;text-transform:uppercase}
 .print-bar button:hover{background:var(--alu)}
-.report{max-width:880px;margin:0 auto;padding:32px 40px 60px;background:var(--white);min-height:100vh;box-shadow:0 0 30px rgba(35,49,45,.08)}
+.report{max-width:880px;margin:60px auto 0;padding:32px 40px 60px;background:var(--white);box-shadow:0 0 30px rgba(35,49,45,.08)}
 .head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid var(--dark);padding-bottom:18px;margin-bottom:24px}
 .head .left{display:flex;align-items:center;gap:14px}
 .logo{width:48px;height:48px;background:var(--dark);border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -3026,15 +3026,18 @@ tfoot td{font-weight:700;color:var(--dark);background:var(--ivory);border-top:2p
 .cat-amount{font-family:'JetBrains Mono',monospace;color:var(--dark);min-width:80px;text-align:right;font-weight:500}
 .foot{margin-top:40px;padding-top:18px;border-top:1px solid var(--border);font-size:10px;color:var(--dark-3);display:flex;justify-content:space-between;letter-spacing:.04em}
 .note{font-size:11px;color:var(--dark-2);background:var(--ivory);padding:10px 14px;border-left:3px solid var(--gold);border-radius:0 4px 4px 0;margin-top:10px;font-style:italic}
+@page{size:A4;margin:14mm 12mm}
 @media print{
-  .print-bar{display:none}
-  body{background:white}
-  .report{box-shadow:none;max-width:none;padding:20mm 18mm}
-  table{page-break-inside:auto}
-  tr{page-break-inside:avoid}
+  *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color-adjust:exact !important}
+  html,body{background:#fff !important;margin:0 !important;padding:0 !important;width:auto !important;height:auto !important;min-height:0 !important;overflow:visible !important}
+  .print-bar{display:none !important}
+  .report{box-shadow:none !important;max-width:none !important;margin:0 !important;padding:0 !important;background:#fff !important}
+  table{page-break-inside:auto;width:100% !important}
+  tr{page-break-inside:avoid;page-break-after:auto}
   thead{display:table-header-group}
   tfoot{display:table-footer-group}
-  h2{page-break-after:avoid}
+  h1,h2,h3{page-break-after:avoid;page-break-inside:avoid}
+  .kpi-grid,.head,.cat-bars{page-break-inside:avoid}
 }
 </style>
 </head>
@@ -3042,7 +3045,7 @@ tfoot td{font-weight:700;color:var(--dark);background:var(--ivory);border-top:2p
 
 <div class="print-bar">
   <span>Resumen de proyecto · ${escapeHtml(p.code||'')}</span>
-  <button onclick="window.print()">Imprimir / Guardar PDF ⤵</button>
+  <button onclick="(async()=>{if(document.fonts&&document.fonts.ready)await document.fonts.ready;window.print();})()">Imprimir / Guardar PDF ⤵</button>
 </div>
 
 <div class="report">
@@ -3208,12 +3211,17 @@ tfoot td{font-weight:700;color:var(--dark);background:var(--ivory);border-top:2p
 </body>
 </html>`;
 
-  // abrir en pestaña nueva
-  const w = window.open('', '_blank');
-  if (!w){ toast('Permite ventanas emergentes para generar el resumen', true); return; }
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
+  // abrir en pestaña nueva usando blob URL (más estable que document.write)
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, '_blank');
+  if (!w){
+    URL.revokeObjectURL(url);
+    toast('Permite ventanas emergentes para generar el resumen', true);
+    return;
+  }
+  // liberar el blob URL después de 60s (suficiente para que cargue)
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 function openProject(id){
